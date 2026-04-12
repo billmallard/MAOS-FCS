@@ -186,6 +186,35 @@ Planned layout:
 - Traceable requirements-to-test mapping
 - Static analysis and coding-standard enforcement
 
+## Robot Regression Harness
+
+For unattended, repeatable X-Plane SIL runs, use the Robot Framework harness:
+
+- Test suite: `tests/robot/sil_campaign.robot`
+- Manifest suite: `tests/robot/sil_manifest.robot`
+- Manifest keywords: `tests/robot/resources/sil_manifest_keywords.robot`
+- Example manifest: `tests/robot/manifests/smoke_manifest.json`
+- Runner: `tools/testing/run_robot_sil_tests.ps1`
+- Campaign engine: `tools/testing/run_sil_campaign_webapi.py`
+
+Examples:
+
+- Smoke campaign suite:
+	- `powershell -ExecutionPolicy Bypass -File tools/testing/run_robot_sil_tests.ps1 -Suite smoke`
+- Default regression suite:
+	- `powershell -ExecutionPolicy Bypass -File tools/testing/run_robot_sil_tests.ps1 -Suite regression`
+- Manifest-driven suite:
+	- `powershell -ExecutionPolicy Bypass -File tools/testing/run_robot_sil_tests.ps1 -Suite manifest`
+
+Outputs:
+
+- Robot reports: `logs/robot/`
+- Campaign artifacts: `logs/sil_campaign/<timestamp>/`
+
+The campaign engine also accepts a custom manifest directly:
+
+- `python tools/testing/run_sil_campaign_webapi.py --manifest tests/robot/manifests/smoke_manifest.json`
+
 ## Security Scanning and Secret Hygiene
 
 - GitHub CodeQL SAST runs via CI on push, pull request, and weekly schedule.

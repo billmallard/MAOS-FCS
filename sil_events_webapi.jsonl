@@ -1,0 +1,2 @@
+{"details": {"active_profiles": ["generic-servo"], "aircraft_name": "MAOS-GA-001", "api_type": "webapi", "cycles": 200, "hz": 20, "xplane_host": "127.0.0.1"}, "event_type": "sil_start", "mode": "triplex", "reason_code": "boot", "timestamp_utc": "2026-04-12T20:59:00.564697+00:00"}
+{"details": {"active_profiles": ["generic-servo"], "aircraft_name": "MAOS-GA-001", "api_type": "webapi", "cycles": 200, "hz": 20, "xplane_host": "127.0.0.1"}, "event_type": "sil_start", "mode": "triplex", "reason_code": "boot", "timestamp_utc": "2026-04-12T21:06:37.491547+00:00"}

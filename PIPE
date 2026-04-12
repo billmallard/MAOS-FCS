@@ -1,0 +1,31 @@
+[SIL] Loading aircraft config: D:\Users\wpballard\Documents\github\MAOS-FCS\configs\aircraft\ga_default.json
+[SIL] Aircraft: MAOS-GA-001
+[SIL] Active profiles: ['generic-servo']
+[SIL] Covered axes: ['flap', 'pitch', 'roll', 'yaw']
+[SIL] Protections: 58–165 KIAS, max bank 45°
+[SIL] Connecting to X-Plane Web API at 127.0.0.1:8086...
+[SIL] Starting loop: 80 cycles @ 20 Hz
+[SIL] cycle=   0  mode=triplex   IAS= 90.0  pitch=+0.000  frames=3  protections=none
+[SIL] cycle=  20  mode=triplex   IAS=111.5  pitch=-0.033  frames=3  protections=none
+[SIL] cycle=  40  mode=triplex   IAS=111.5  pitch=-0.033  frames=3  protections=none
+[SIL] cycle=  60  mode=triplex   IAS=111.5  pitch=-0.033  frames=3  protections=none
+[SIL] Loop complete. Events logged to: D:\Users\wpballard\Documents\github\MAOS-FCS\logs\sil_campaign\20260412_223322\001_manifest_smoke_baseline.jsonl
+[SIL] Loading aircraft config: D:\Users\wpballard\Documents\github\MAOS-FCS\configs\aircraft\ga_default.json
+[SIL] Aircraft: MAOS-GA-001
+[SIL] Active profiles: ['generic-servo']
+[SIL] Covered axes: ['flap', 'pitch', 'roll', 'yaw']
+[SIL] Protections: 58–165 KIAS, max bank 45°
+[SIL] Connecting to X-Plane Web API at 127.0.0.1:8086...
+[SIL] Starting loop: 120 cycles @ 40 Hz
+[SIL] cycle=   0  mode=triplex   IAS= 90.0  pitch=+0.000  frames=3  protections=none
+[SIL] cycle=  40  mode=triplex   IAS=111.5  pitch=-0.033  frames=3  protections=none
+[SIL] cycle=  80  mode=triplex   IAS=111.5  pitch=-0.033  frames=3  protections=none
+[SIL] Loop complete. Events logged to: D:\Users\wpballard\Documents\github\MAOS-FCS\logs\sil_campaign\20260412_223322\001_manifest_smoke_highrate.jsonl
+[campaign] using manifest: D:\Users\wpballard\Documents\github\MAOS-FCS\tests\robot\manifests\smoke_manifest.json
+[campaign] X-Plane 12.4.1 reachable, API versions: ['v1', 'v2', 'v3']
+[campaign] warning: could not force unpause: 403 Client Error: Forbidden for url: http://127.0.0.1:8086/api/v3/datarefs/1748511618776/value
+[campaign] repetition 1/1
+[campaign] start scenario=manifest_smoke_baseline cycles=80 hz=20 gust=False
+[campaign] start scenario=manifest_smoke_highrate cycles=120 hz=40 gust=False
+[campaign] complete: total_runs=2, failures=0
+[campaign] artifacts: logs\sil_campaign\20260412_223322\summary.json

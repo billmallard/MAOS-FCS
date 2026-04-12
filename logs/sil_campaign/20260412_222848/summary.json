@@ -1,0 +1,30 @@
+{
+  "timestamp_utc": "2026-04-12T22:29:01.834895Z",
+  "host": "127.0.0.1",
+  "port": 8086,
+  "repeats": 1,
+  "total_runs": 2,
+  "failures": 0,
+  "results": [
+    {
+      "repeat": 1,
+      "scenario": "smoke_baseline",
+      "cycles": 80,
+      "hz": 20,
+      "gust": false,
+      "log": "logs\\sil_campaign\\20260412_222848\\001_smoke_baseline.jsonl",
+      "return_code": 0,
+      "ok": true
+    },
+    {
+      "repeat": 1,
+      "scenario": "smoke_highrate",
+      "cycles": 100,
+      "hz": 40,
+      "gust": false,
+      "log": "logs\\sil_campaign\\20260412_222848\\001_smoke_highrate.jsonl",
+      "return_code": 0,
+      "ok": true
+    }
+  ]
+}

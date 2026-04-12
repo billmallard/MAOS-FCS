@@ -1,0 +1,19 @@
+{
+  "host": "127.0.0.1",
+  "port": 8086,
+  "repeats": 1,
+  "scenarios": [
+    {
+      "name": "manifest_smoke_baseline",
+      "cycles": 80,
+      "hz": 20,
+      "gust": false
+    },
+    {
+      "name": "manifest_smoke_highrate",
+      "cycles": 120,
+      "hz": 40,
+      "gust": false
+    }
+  ]
+}

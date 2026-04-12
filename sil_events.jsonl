@@ -1,0 +1,3 @@
+{"details": {"active_profiles": ["generic-servo"], "aircraft_name": "MAOS-GA-001", "cycles": 200, "dry_run": false, "hz": 20}, "event_type": "sil_start", "mode": "triplex", "reason_code": "boot", "timestamp_utc": "2026-04-12T19:57:35.591037+00:00"}
+{"details": {"active_profiles": ["generic-servo"], "aircraft_name": "MAOS-GA-001", "cycles": 200, "dry_run": false, "hz": 20}, "event_type": "sil_start", "mode": "triplex", "reason_code": "boot", "timestamp_utc": "2026-04-12T20:08:46.081693+00:00"}
+{"details": {"active_profiles": ["generic-servo"], "aircraft_name": "MAOS-GA-001", "cycles": 200, "dry_run": false, "hz": 20}, "event_type": "sil_start", "mode": "triplex", "reason_code": "boot", "timestamp_utc": "2026-04-12T21:04:33.276609+00:00"}
