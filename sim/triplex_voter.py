@@ -1,0 +1,89 @@
+"""Triplex lane command voting prototype for MAOS-FCS.
+
+This module models 3 FCC lanes producing the same command. The voter picks
+mid-value select output and flags outlier lanes.
+"""
+
+from dataclasses import dataclass
+from typing import Iterable, List, Tuple
+
+
+@dataclass(frozen=True)
+class LaneSample:
+    """Single lane output and health metadata."""
+
+    lane_id: str
+    command: float
+    healthy: bool = True
+
+
+@dataclass(frozen=True)
+class VoteResult:
+    """Result of a voting cycle."""
+
+    voted_command: float
+    failed_lanes: Tuple[str, ...]
+    active_lanes: Tuple[str, ...]
+    mode: str
+
+
+def _median_of_three(a: float, b: float, c: float) -> float:
+    values = sorted([a, b, c])
+    return values[1]
+
+
+def vote_triplex(samples: Iterable[LaneSample], disagreement_threshold: float = 0.08) -> VoteResult:
+    """Perform triplex voting with outlier detection.
+
+    disagreement_threshold is in command units (for example normalized deflection).
+    """
+
+    lane_samples: List[LaneSample] = [s for s in samples if s.healthy]
+    if len(lane_samples) < 2:
+        raise ValueError("Need at least two healthy lanes to vote")
+
+    if len(lane_samples) == 2:
+        cmd = (lane_samples[0].command + lane_samples[1].command) / 2.0
+        return VoteResult(
+            voted_command=cmd,
+            failed_lanes=tuple(),
+            active_lanes=(lane_samples[0].lane_id, lane_samples[1].lane_id),
+            mode="duplex",
+        )
+
+    a, b, c = lane_samples[:3]
+    voted = _median_of_three(a.command, b.command, c.command)
+
+    failed: List[str] = []
+    for sample in (a, b, c):
+        if abs(sample.command - voted) > disagreement_threshold:
+            failed.append(sample.lane_id)
+
+    active = tuple(sample.lane_id for sample in (a, b, c) if sample.lane_id not in failed)
+    mode = "triplex" if len(active) == 3 else "degraded"
+
+    return VoteResult(
+        voted_command=voted,
+        failed_lanes=tuple(sorted(failed)),
+        active_lanes=active,
+        mode=mode,
+    )
+
+
+def run_demo() -> None:
+    """Small demonstration with one faulty lane."""
+
+    samples = [
+        LaneSample("A", 0.12),
+        LaneSample("B", 0.11),
+        LaneSample("C", 0.47),
+    ]
+    result = vote_triplex(samples, disagreement_threshold=0.10)
+    print("Voted command:", round(result.voted_command, 4))
+    print("Failed lanes:", result.failed_lanes)
+    print("Active lanes:", result.active_lanes)
+    print("Mode:", result.mode)
+
+
+if __name__ == "__main__":
+    run_demo()
