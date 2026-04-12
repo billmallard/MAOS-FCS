@@ -5,8 +5,11 @@ This folder is a deterministic scheduler and protocol-stub starting point for tr
 ## Current contents
 
 - include/fcc_scheduler.h: scheduler interface
+- include/actuator_protocol.h: actuator frame pack/unpack interfaces
 - src/fcc_scheduler.c: scheduler implementation
+- src/actuator_protocol.c: actuator CRC and frame parsing helpers
 - src/main.c: minimal demonstration harness
+- src/test_actuator_protocol.c: C conformance test vectors for actuator protocol
 
 ## Design intent
 

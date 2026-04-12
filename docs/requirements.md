@@ -85,6 +85,7 @@ These requirements cover:
 - FCS-VER-008: Tests shall verify actuator command and feedback codec roundtrip behavior and CRC rejection.
 - FCS-VER-009: Tests shall verify actuator profile adapter mappings for baseline and future-axis profiles.
 - FCS-VER-010: Tests shall verify actuator runtime monitoring for mismatch, timeout persistence, and event logging behavior.
+- FCS-VER-011: Cross-language conformance vectors shall be maintained so firmware and simulation actuator codecs remain byte-aligned.
 
 ## Notes
 
