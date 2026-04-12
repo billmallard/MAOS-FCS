@@ -27,6 +27,26 @@ These requirements cover:
 - FCS-LANE-003: Each lane shall include a monotonic cycle counter in cross-channel messages.
 - FCS-LANE-004: Each lane shall include message integrity protection (CRC) in cross-channel messages.
 
+### Axis coverage and extensibility
+
+- FCS-AXIS-001: The baseline control architecture shall include pitch, roll, and yaw axes.
+- FCS-AXIS-002: The architecture shall support optional flap and spoiler control axes.
+- FCS-AXIS-003: The architecture shall allow additional unknown axes to be introduced without breaking existing axis contracts.
+- FCS-AXIS-004: Axis command arbitration shall be deterministic when multiple providers command the same axis.
+
+### Avionics command ingress
+
+- FCS-AVX-001: The system shall support a normalized autopilot command interface independent of vendor-specific payload formats.
+- FCS-AVX-002: The ingress architecture shall use vendor adapters to map payloads into normalized command objects.
+- FCS-AVX-003: Unknown vendor payloads shall be ignored safely without affecting flight-control command integrity.
+
+### Configurable control laws
+
+- FCS-LAW-001: The system shall load control-law protection limits from user-editable configuration files.
+- FCS-LAW-002: Control-law protections shall include minimum airspeed (stall protection), maximum airspeed (overspeed protection), and maximum bank angle protection.
+- FCS-LAW-003: At least two example control-law profiles shall be provided for different GA aircraft classes.
+- FCS-LAW-004: Protection activity flags shall be exposed for telemetry and test validation.
+
 ### Voting and fault isolation
 
 - FCS-VOTE-001: In triplex mode, continuous command channels shall use mid-value select voting.
@@ -47,6 +67,9 @@ These requirements cover:
 - FCS-VER-002: Simulation tests shall include single-lane command outlier injection and verify isolation.
 - FCS-VER-003: Simulation tests shall include lane dropout resulting in duplex operation.
 - FCS-VER-004: Requirement coverage shall map each implemented test to one or more requirement IDs.
+- FCS-VER-005: Tests shall verify configurable protection behavior for stall, overspeed, and excessive bank conditions.
+- FCS-VER-006: Tests shall verify plugin/provider arbitration behavior for required, optional, and future axes.
+- FCS-VER-007: Tests shall verify autopilot ingress normalization for at least one generic vendor adapter.
 
 ## Notes
 

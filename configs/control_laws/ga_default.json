@@ -1,0 +1,11 @@
+{
+  "profile_name": "ga_default",
+  "description": "Baseline GA protection profile for experimental FBW tuning.",
+  "protections": {
+    "min_airspeed_kias": 58.0,
+    "max_airspeed_kias": 165.0,
+    "max_bank_deg": 45.0,
+    "stall_pitch_up_limit_norm": 0.05,
+    "overspeed_pitch_down_limit_norm": -0.05
+  }
+}

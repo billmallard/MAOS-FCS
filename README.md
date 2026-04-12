@@ -176,6 +176,7 @@ Planned layout:
 - hil  Hardware-in-the-loop test scenarios
 - tools  Ground and analysis scripts
 - docs  Architecture, safety, interface specs
+- configs  User-tunable control-law profiles
 
 ## Verification Strategy
 
@@ -209,7 +210,7 @@ This milestone establishes the core redundancy behavior before hardware lock-in.
 
 ## Immediate next steps
 
-1. Define flight phase and control mode requirements in docs/requirements.md.
-2. Implement libs/protocol message schema for lane health and command exchange.
-3. Implement sim/triplex_voter prototype and fault-injection tests.
-4. Freeze hardware interfaces for FCC and ADC v0.1.
+1. Add actuator command/feedback wire format and codec tests.
+2. Add simulation event log emitter with transition and reason codes.
+3. Start firmware/fcc scheduler scaffold and protocol stubs.
+4. Add more avionics adapters beyond generic ingress (bridge-based first).

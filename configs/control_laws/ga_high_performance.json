@@ -1,0 +1,11 @@
+{
+  "profile_name": "ga_high_performance",
+  "description": "Higher-energy profile with wider envelope for high-performance airframes.",
+  "protections": {
+    "min_airspeed_kias": 72.0,
+    "max_airspeed_kias": 210.0,
+    "max_bank_deg": 60.0,
+    "stall_pitch_up_limit_norm": 0.04,
+    "overspeed_pitch_down_limit_norm": -0.04
+  }
+}
