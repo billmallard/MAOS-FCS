@@ -130,3 +130,47 @@ uint8_t actuator_unpack_feedback(
     out_fb->supply_voltage_v_x100 = unpack_u16_le(&frame[16]);
     return 1U;
 }
+
+actuator_degrade_reason_t actuator_evaluate_feedback(
+    const actuator_feedback_t *fb,
+    int16_t expected_position_x10000,
+    uint16_t position_error_limit_x10000
+) {
+    uint8_t fault_count = 0U;
+    actuator_degrade_reason_t reason = ACTUATOR_DEGRADE_NONE;
+    int32_t pos_err;
+
+    if (fb == 0) {
+        return ACTUATOR_DEGRADE_NONE;
+    }
+
+    /* Position mismatch: arithmetic check OR reported fault bit */
+    pos_err = (int32_t)fb->measured_position_norm_x10000
+              - (int32_t)expected_position_x10000;
+    if (pos_err < 0) {
+        pos_err = -pos_err;
+    }
+    if ((uint32_t)pos_err > (uint32_t)position_error_limit_x10000
+            || (fb->fault_flags & ACTUATOR_FAULT_POSITION_MISMATCH) != 0U) {
+        reason = ACTUATOR_DEGRADE_POSITION_MISMATCH;
+        fault_count++;
+    }
+
+    /* Overtemperature: threshold check OR reported fault bit */
+    if (fb->temperature_c_x10 >= ACTUATOR_TEMP_LIMIT_X10
+            || (fb->fault_flags & ACTUATOR_FAULT_OVERTEMPERATURE) != 0U) {
+        reason = ACTUATOR_DEGRADE_OVERTEMPERATURE;
+        fault_count++;
+    }
+
+    /* Comm timeout: reported fault bit only (counter is maintained externally) */
+    if ((fb->fault_flags & ACTUATOR_FAULT_COMM_TIMEOUT) != 0U) {
+        reason = ACTUATOR_DEGRADE_COMM_TIMEOUT;
+        fault_count++;
+    }
+
+    if (fault_count > 1U) {
+        return ACTUATOR_DEGRADE_MULTI_FAULT;
+    }
+    return reason;
+}

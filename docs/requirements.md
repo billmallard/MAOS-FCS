@@ -86,6 +86,7 @@ These requirements cover:
 - FCS-VER-009: Tests shall verify actuator profile adapter mappings for baseline and future-axis profiles.
 - FCS-VER-010: Tests shall verify actuator runtime monitoring for mismatch, timeout persistence, and event logging behavior.
 - FCS-VER-011: Cross-language conformance vectors shall be maintained so firmware and simulation actuator codecs remain byte-aligned.
+- FCS-VER-012: Cross-language fault interpretation conformance vectors shall verify that C actuator_evaluate_feedback() and Python evaluate_feedback() return identical reason codes for overtemperature, position_mismatch, comm_timeout, and multi-fault conditions.
 
 ## Notes
 
