@@ -241,6 +241,10 @@ Do not begin agentic orchestration until all are true:
 - Reproducibility checks validated on at least two separate dates
 - Requirement coverage report generated automatically each run
 
+For weekly cross-project reporting structure, see [MAOS-FCS Weekly Roll-Up Report Template](weekly_rollup_report_template.md).
+
+For automated report generation, see [Weekly Roll-Up Automation](weekly_rollup_automation.md).
+
 ## Immediate Next Three Tickets
 
 1. P0-A1 Create campaign module skeleton
