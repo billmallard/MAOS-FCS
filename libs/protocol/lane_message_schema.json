@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://maos-fcs.local/schemas/lane-message.schema.json",
+  "title": "MAOS-FCS Lane Message",
+  "description": "Cross-channel lane exchange message for triplex voting.",
+  "type": "object",
+  "required": [
+    "protocol_version",
+    "lane_id",
+    "cycle_counter",
+    "timestamp_us",
+    "mode",
+    "health",
+    "command",
+    "crc32"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "protocol_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 255
+    },
+    "lane_id": {
+      "type": "string",
+      "enum": ["A", "B", "C"]
+    },
+    "cycle_counter": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "timestamp_us": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["triplex", "degraded", "failsafe"]
+    },
+    "health": {
+      "type": "object",
+      "required": [
+        "bit_ok",
+        "sensor_ok",
+        "timing_ok",
+        "comm_ok"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "bit_ok": { "type": "boolean" },
+        "sensor_ok": { "type": "boolean" },
+        "timing_ok": { "type": "boolean" },
+        "comm_ok": { "type": "boolean" }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": ["surface", "value_norm"],
+      "additionalProperties": false,
+      "properties": {
+        "surface": {
+          "type": "string",
+          "enum": ["elevator", "aileron", "rudder", "flap", "trim"]
+        },
+        "value_norm": {
+          "type": "number",
+          "minimum": -1.0,
+          "maximum": 1.0
+        },
+        "rate_limit_norm_per_s": {
+          "type": "number",
+          "minimum": 0.0
+        }
+      }
+    },
+    "fault_flags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "sensor_disagree",
+          "timing_overrun",
+          "comm_crc_error",
+          "actuator_feedback_mismatch",
+          "watchdog_reset"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "crc32": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    }
+  }
+}

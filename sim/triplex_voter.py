@@ -40,7 +40,12 @@ def vote_triplex(samples: Iterable[LaneSample], disagreement_threshold: float = 
 
     lane_samples: List[LaneSample] = [s for s in samples if s.healthy]
     if len(lane_samples) < 2:
-        raise ValueError("Need at least two healthy lanes to vote")
+        return VoteResult(
+            voted_command=0.0,
+            failed_lanes=tuple(sorted(s.lane_id for s in samples)),
+            active_lanes=tuple(),
+            mode="failsafe",
+        )
 
     if len(lane_samples) == 2:
         cmd = (lane_samples[0].command + lane_samples[1].command) / 2.0
@@ -68,6 +73,18 @@ def vote_triplex(samples: Iterable[LaneSample], disagreement_threshold: float = 
         active_lanes=active,
         mode=mode,
     )
+
+
+def inject_lane_bias(samples: Iterable[LaneSample], lane_id: str, bias: float) -> List[LaneSample]:
+    """Return new samples with deterministic additive bias injected in one lane."""
+
+    out: List[LaneSample] = []
+    for sample in samples:
+        if sample.lane_id == lane_id:
+            out.append(LaneSample(sample.lane_id, sample.command + bias, sample.healthy))
+        else:
+            out.append(sample)
+    return out
 
 
 def run_demo() -> None:

@@ -1,0 +1,20 @@
+# Protocol Overview
+
+This folder defines cross-channel and actuator-facing message contracts.
+
+## v0.1 artifacts
+
+- lane_message_schema.json: Canonical schema for FCC lane health + command exchange.
+
+## Design intent
+
+- Deterministic field set and bounded value ranges.
+- Explicit lane identity and cycle timing metadata.
+- Structured health flags to support voting and fault isolation.
+- Integrity field (CRC) to support transport-level corruption checks.
+
+## Next additions
+
+- Binary packed wire format definition for CAN-FD frames.
+- Message compatibility/versioning strategy.
+- Actuator command and actuator feedback schemas.
