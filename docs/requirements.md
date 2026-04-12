@@ -110,6 +110,37 @@ Concrete first-pass SIL test scenarios are defined in [SIL Phase-1 Test Matrix](
 
 High-fidelity simulation phases (actuator dynamics, sensor faults, bus timing, etc.) are planned in [SIL Fidelity Evolution Roadmap](sil_fidelity_roadmap.md).
 
+## Future Requirements (Roadmap Candidates)
+
+These items are approved as roadmap intent but are not baseline implementation requirements for v0.1.
+
+### Phase-of-flight awareness and mode shaping
+
+- FCS-FUT-001: The system shall support a configurable phase-of-flight state model with at least takeoff, climb, cruise, descent, landing, and go-around phases.
+- FCS-FUT-002: Phase transitions shall be deterministic and based on configurable entry/exit criteria derived from available aircraft state and pilot inputs.
+- FCS-FUT-003: Control-law gain scheduling, protections, and advisories shall be capable of phase-aware behavior as defined in configuration.
+- FCS-FUT-004: Active phase and transition reason shall be logged for traceability and post-flight analysis.
+
+### Multi-engine engine-out awareness and compensation
+
+- FCS-FUT-005: For configured multi-engine aircraft, the system shall detect and declare probable engine-failure conditions using configurable thresholds and persistence logic.
+- FCS-FUT-006: Upon declared engine-out, the control system shall apply bounded, configurable compensation strategies for asymmetric yaw and degraded performance.
+- FCS-FUT-007: The system shall estimate available performance margin in real time and determine whether level-flight maintenance is feasible in current conditions.
+- FCS-FUT-008: If performance margin is insufficient, the system shall issue prioritized pilot alerts with recommended mitigation actions.
+
+### Configurable acrobatic mode
+
+- FCS-FUT-009: The system shall support an optional acrobatic mode enabled only through explicit pilot action and configuration authorization.
+- FCS-FUT-010: Acrobatic mode shall adjust or suspend selected envelope protections according to a configuration profile while preserving critical integrity and fault-monitoring functions.
+- FCS-FUT-011: Mode engagement/disengagement shall include clear cockpit annunciation and event logging, with deterministic transition behavior.
+
+### Pilot incapacitation response and potential autoland
+
+- FCS-FUT-012: The architecture shall reserve an optional pilot-incapacitation response mode as a future capability, including interfaces for trigger sources and safety interlocks.
+- FCS-FUT-013: When enabled by aircraft configuration, incapacitation response logic shall support progressive actions (stabilize, navigate, communicate, and land) with deterministic abort criteria.
+- FCS-FUT-014: Any autoland-capable implementation shall require explicit sensor/actuator health gating, runway/approach suitability checks, and continuous pilot override authority.
+- FCS-FUT-015: Incapacitation and autoland actions shall be fully logged, including trigger source, gating decisions, and pilot override events.
+
 ## Notes
 
 - This is a draft baseline for experimental development and will evolve with plant modeling and hardware constraints.
