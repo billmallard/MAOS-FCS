@@ -8,3 +8,16 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local secrets and environment files
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+id_rsa
+id_ed25519

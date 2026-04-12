@@ -186,6 +186,14 @@ Planned layout:
 - Traceable requirements-to-test mapping
 - Static analysis and coding-standard enforcement
 
+## Security Scanning and Secret Hygiene
+
+- GitHub CodeQL SAST runs via CI on push, pull request, and weekly schedule.
+- GitHub CI secret scanning is enforced with Gitleaks on push, pull request, and weekly schedule.
+- Local pre-commit hooks are available to catch private keys and common secret mistakes before commit.
+
+See [SECURITY.md](SECURITY.md) for policy, reporting, and emergency secret rotation guidance.
+
 ## Certification-style References
 
 Use these as best-practice references, not as claims of certification or compliance:
