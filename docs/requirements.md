@@ -47,6 +47,8 @@ These requirements cover:
 - FCS-ACT-003: Feedback messages shall include position, rate, current, temperature, and supply voltage fields.
 - FCS-ACT-004: Command and feedback messages shall include integrity protection (CRC).
 - FCS-ACT-005: The architecture shall not rely on direct analog voltage control as the sole command method.
+- FCS-ACT-006: The system shall support actuator profile adapters that map normalized axes to vendor-specific actuator IDs and limits.
+- FCS-ACT-007: At least three actuator profile examples shall be provided, including one future thrust-axis bridge profile.
 
 ### Configurable control laws
 
@@ -79,6 +81,7 @@ These requirements cover:
 - FCS-VER-006: Tests shall verify plugin/provider arbitration behavior for required, optional, and future axes.
 - FCS-VER-007: Tests shall verify autopilot ingress normalization for at least one generic vendor adapter.
 - FCS-VER-008: Tests shall verify actuator command and feedback codec roundtrip behavior and CRC rejection.
+- FCS-VER-009: Tests shall verify actuator profile adapter mappings for baseline and future-axis profiles.
 
 ## Notes
 

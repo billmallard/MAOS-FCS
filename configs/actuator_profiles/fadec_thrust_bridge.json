@@ -1,0 +1,12 @@
+{
+  "profile_name": "fadec_thrust_bridge",
+  "description": "Bridge profile for future thrust-axis integration with FADEC-like systems.",
+  "vendor_key": "fadec-bridge",
+  "default_mode": "effort",
+  "max_rate_norm_per_s": 0.8,
+  "max_effort_norm": 1.0,
+  "enable_local_limits": true,
+  "axis_to_actuator": {
+    "thrust": 21
+  }
+}

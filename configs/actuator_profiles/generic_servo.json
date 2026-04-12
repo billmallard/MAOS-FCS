@@ -1,0 +1,15 @@
+{
+  "profile_name": "generic_servo",
+  "description": "Position-centric profile for generic smart servo actuators.",
+  "vendor_key": "generic-servo",
+  "default_mode": "position",
+  "max_rate_norm_per_s": 1.2,
+  "max_effort_norm": 0.65,
+  "enable_local_limits": true,
+  "axis_to_actuator": {
+    "pitch": 1,
+    "roll": 2,
+    "yaw": 3,
+    "flap": 4
+  }
+}

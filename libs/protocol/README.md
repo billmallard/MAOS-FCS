@@ -18,4 +18,4 @@ This folder defines cross-channel and actuator-facing message contracts.
 ## Next additions
 
 - Message compatibility/versioning strategy.
-- Vendor profile mappings for actuator adapters.
+- Transport-driver integration for actuator profile mappings.

@@ -1,0 +1,15 @@
+{
+  "profile_name": "smart_ema",
+  "description": "Electromechanical actuator profile with higher authority and speed.",
+  "vendor_key": "smart-ema",
+  "default_mode": "rate",
+  "max_rate_norm_per_s": 2.2,
+  "max_effort_norm": 0.9,
+  "enable_local_limits": true,
+  "axis_to_actuator": {
+    "pitch": 11,
+    "roll": 12,
+    "yaw": 13,
+    "spoiler": 14
+  }
+}
