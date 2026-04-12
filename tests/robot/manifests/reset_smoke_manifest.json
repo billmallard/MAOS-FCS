@@ -1,0 +1,40 @@
+{
+  "host": "127.0.0.1",
+  "port": 8086,
+  "repeats": 1,
+  "reset_each_run": true,
+  "reset_wait_s": 10,
+  "reset_request_timeout_s": 90,
+  "reset_retries": 2,
+  "airborne_after_reset": true,
+  "airborne_altitude_agl_ft": 3000,
+  "airborne_airspeed_kias": 100,
+  "airborne_wait_s": 3,
+  "startup_flight": {
+    "aircraft": {
+      "path": "Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP.acf"
+    },
+    "runway_start": {
+      "airport_id": "KPDX",
+      "runway": "28L"
+    },
+    "local_time": {
+      "day_of_year": 120,
+      "time_in_24_hours": 12.0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "reset_smoke_baseline",
+      "cycles": 80,
+      "hz": 20,
+      "gust": false
+    },
+    {
+      "name": "reset_smoke_highrate",
+      "cycles": 100,
+      "hz": 40,
+      "gust": false
+    }
+  ]
+}

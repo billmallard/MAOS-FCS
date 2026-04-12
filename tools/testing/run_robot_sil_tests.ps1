@@ -1,5 +1,5 @@
 Param(
-    [ValidateSet("smoke", "regression", "manifest", "all")]
+    [ValidateSet("smoke", "regression", "manifest", "manifest-reset", "all")]
     [string]$Suite = "smoke"
 )
 
@@ -21,10 +21,11 @@ switch ($Suite) {
     "smoke" { $tagArgs = @("--include", "smoke") }
     "regression" { $tagArgs = @("--include", "regression") }
     "manifest" { $tagArgs = @("--include", "manifest") }
+    "manifest-reset" { $tagArgs = @("--include", "reset") }
     default { $tagArgs = @() }
 }
 
-if ($Suite -eq "manifest") {
+if ($Suite -eq "manifest" -or $Suite -eq "manifest-reset") {
     & $Python -m robot @tagArgs --outputdir $OutDir $ManifestRobotFile
 }
 elseif ($Suite -eq "all") {

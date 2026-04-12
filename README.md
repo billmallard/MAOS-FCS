@@ -215,6 +215,36 @@ The campaign engine also accepts a custom manifest directly:
 
 - `python tools/testing/run_sil_campaign_webapi.py --manifest tests/robot/manifests/smoke_manifest.json`
 
+Reset/startup flow (recommended for repeatability):
+
+- Define `startup_flight` in manifest and set `reset_each_run: true`
+- Optional settle delay: `reset_wait_s`
+- Optional reset robustness tuning: `reset_request_timeout_s` and `reset_retries`
+- Example manifest:
+	- `tests/robot/manifests/reset_smoke_manifest.json`
+
+Example command:
+
+- `python tools/testing/run_sil_campaign_webapi.py --manifest tests/robot/manifests/reset_smoke_manifest.json --stabilize-on-exit`
+
+Readiness handling:
+
+- Default behavior classifies readiness failures as `INFRA_FAIL` per scenario and continues.
+- Strict mode stops execution before scenarios:
+	- `python tools/testing/run_sil_campaign_webapi.py --manifest tests/robot/manifests/smoke_manifest.json --strict-readiness`
+
+Campaign summary outputs per run:
+
+- `logs/sil_campaign/<timestamp>/campaign_summary.json`
+- `logs/sil_campaign/<timestamp>/campaign_summary.md`
+- `logs/sil_campaign/<timestamp>/summary.json` (legacy-compatible alias)
+
+Safety cleanup controls:
+
+- `--stabilize-on-exit` level wings and apply mild climb guidance toward target altitude
+- `--cleanup-target-altitude-ft 2000` target climb altitude for cleanup guidance
+- `--pause-on-exit` pause simulator at end of campaign (enabled by default)
+
 ## Security Scanning and Secret Hygiene
 
 - GitHub CodeQL SAST runs via CI on push, pull request, and weekly schedule.

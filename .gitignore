@@ -21,3 +21,6 @@ Thumbs.db
 *.jks
 id_rsa
 id_ed25519
+
+# Generated test/campaign artifacts
+logs/
