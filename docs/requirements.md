@@ -108,6 +108,10 @@ These requirements cover:
 
 Concrete first-pass SIL test scenarios are defined in [SIL Phase-1 Test Matrix](sil_phase1_test_matrix.md).
 
+Practical first-session execution guidance is defined in [First X-Plane SIL Session Kit](sil_first_xplane_session_kit.md).
+
+Deterministic campaign automation planning is defined in [SIL Phase-0 Automation Blueprint](sil_phase0_automation_blueprint.md).
+
 High-fidelity simulation phases (actuator dynamics, sensor faults, bus timing, etc.) are planned in [SIL Fidelity Evolution Roadmap](sil_fidelity_roadmap.md).
 
 ## Future Requirements (Roadmap Candidates)

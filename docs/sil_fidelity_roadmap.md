@@ -4,6 +4,8 @@ This document outlines the progression from basic SIL (transport/plumbing valida
 
 ## Phase 0: Current State (Post c441957)
 
+Phase-0 campaign automation planning and contracts are captured in [SIL Phase-0 Automation Blueprint](sil_phase0_automation_blueprint.md).
+
 **What works:**
 - Full FCS pipeline integration: provider registry → protections → voter → actuator frames
 - X-Plane UDP bridge with dataref I/O

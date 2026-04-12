@@ -2,6 +2,8 @@
 
 This document defines 12 concrete first-pass SIL scenarios that exercise core FCS requirements without requiring full plant dynamics modeling (Phases 2–6).
 
+For initial bring-up and first live simulator execution flow, see [First X-Plane SIL Session Kit](sil_first_xplane_session_kit.md).
+
 **Scope:** X-Plane-based SIL with basic actuator output and synthetic triplex lanes.
 
 **Test environment:**
