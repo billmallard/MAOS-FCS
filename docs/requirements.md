@@ -40,6 +40,14 @@ These requirements cover:
 - FCS-AVX-002: The ingress architecture shall use vendor adapters to map payloads into normalized command objects.
 - FCS-AVX-003: Unknown vendor payloads shall be ignored safely without affecting flight-control command integrity.
 
+### Actuator interface
+
+- FCS-ACT-001: The actuator interface shall be actuator-vendor agnostic at the protocol layer.
+- FCS-ACT-002: Command messages shall support at least position, rate, and effort control modes.
+- FCS-ACT-003: Feedback messages shall include position, rate, current, temperature, and supply voltage fields.
+- FCS-ACT-004: Command and feedback messages shall include integrity protection (CRC).
+- FCS-ACT-005: The architecture shall not rely on direct analog voltage control as the sole command method.
+
 ### Configurable control laws
 
 - FCS-LAW-001: The system shall load control-law protection limits from user-editable configuration files.
@@ -70,6 +78,7 @@ These requirements cover:
 - FCS-VER-005: Tests shall verify configurable protection behavior for stall, overspeed, and excessive bank conditions.
 - FCS-VER-006: Tests shall verify plugin/provider arbitration behavior for required, optional, and future axes.
 - FCS-VER-007: Tests shall verify autopilot ingress normalization for at least one generic vendor adapter.
+- FCS-VER-008: Tests shall verify actuator command and feedback codec roundtrip behavior and CRC rejection.
 
 ## Notes
 

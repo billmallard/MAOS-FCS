@@ -6,6 +6,7 @@ This folder defines cross-channel and actuator-facing message contracts.
 
 - lane_message_schema.json: Canonical schema for FCC lane health + command exchange.
 - canfd_wire_format.md: Fixed-size binary CAN-FD payload layout for lane exchange.
+- actuator_canfd_wire_format.md: Generic actuator command and feedback frame format.
 
 ## Design intent
 
@@ -17,4 +18,4 @@ This folder defines cross-channel and actuator-facing message contracts.
 ## Next additions
 
 - Message compatibility/versioning strategy.
-- Actuator command and actuator feedback schemas.
+- Vendor profile mappings for actuator adapters.
