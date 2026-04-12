@@ -49,6 +49,8 @@ These requirements cover:
 - FCS-ACT-005: The architecture shall not rely on direct analog voltage control as the sole command method.
 - FCS-ACT-006: The system shall support actuator profile adapters that map normalized axes to vendor-specific actuator IDs and limits.
 - FCS-ACT-007: At least three actuator profile examples shall be provided, including one future thrust-axis bridge profile.
+- FCS-ACT-008: Actuator feedback monitoring shall detect persistent communication timeouts and surface degradation events.
+- FCS-ACT-009: Actuator feedback monitoring shall detect position mismatch and overtemperature conditions against configurable thresholds.
 
 ### Configurable control laws
 
@@ -82,6 +84,7 @@ These requirements cover:
 - FCS-VER-007: Tests shall verify autopilot ingress normalization for at least one generic vendor adapter.
 - FCS-VER-008: Tests shall verify actuator command and feedback codec roundtrip behavior and CRC rejection.
 - FCS-VER-009: Tests shall verify actuator profile adapter mappings for baseline and future-axis profiles.
+- FCS-VER-010: Tests shall verify actuator runtime monitoring for mismatch, timeout persistence, and event logging behavior.
 
 ## Notes
 

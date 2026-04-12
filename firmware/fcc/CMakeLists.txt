@@ -7,6 +7,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 add_executable(maos_fcc
     src/main.c
     src/fcc_scheduler.c
+    src/actuator_protocol.c
 )
 
 target_include_directories(maos_fcc PRIVATE include)

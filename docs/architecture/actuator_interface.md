@@ -30,3 +30,9 @@ Voltage-only control is usually too weak for robust FBW behavior because it lack
 - Create vendor adapter profiles that map this generic contract to specific actuator products.
 - Keep FCC control laws independent from vendor-specific packet formats.
 - Add actuator qualification tests per profile before hardware flight-like testing.
+
+## Current implementation status
+
+- Python runtime includes profile-based frame generation and feedback plausibility monitoring.
+- Monitoring currently checks position mismatch, overtemperature, and persistent comm timeouts.
+- Firmware scaffold includes initial C stubs for command frame packing and CRC32 calculation.
