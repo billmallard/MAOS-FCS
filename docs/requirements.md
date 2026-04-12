@@ -95,6 +95,15 @@ These requirements cover:
 - FCS-VER-011: Cross-language conformance vectors shall be maintained so firmware and simulation actuator codecs remain byte-aligned.
 - FCS-VER-012: Cross-language fault interpretation conformance vectors shall verify that C actuator_evaluate_feedback() and Python evaluate_feedback() return identical reason codes for overtemperature, position_mismatch, comm_timeout, and multi-fault conditions.
 
+### Software-in-the-Loop (SIL) and simulator integration
+
+- FCS-SIL-001: The SIL architecture shall support an external flight simulator (e.g. X-Plane) as a plant model via a network interface without requiring flight-critical code changes.
+- FCS-SIL-002: The X-Plane bridge shall implement the ControlProvider protocol so autopilot guidance from the simulator can participate in the existing priority-arbitration path without special-casing.
+- FCS-SIL-003: The X-Plane bridge shall use only X-Plane's native UDP dataref protocol (RREF/DREF); no third-party plugin shall be required for basic SIL operation.
+- FCS-SIL-004: The SIL loop shall exercise the complete FCS pipeline: provider registry → control law protections → triplex voter → actuator frame generation → surface command output.
+- FCS-SIL-005: SIL events shall be logged in the same JSONL format used by hardware-in-the-loop and simulation test runs.
+- FCS-SIL-006: The SIL driver shall operate in dry-run mode (no network sockets) for automated CI verification without a live simulator.
+
 ## Notes
 
 - This is a draft baseline for experimental development and will evolve with plant modeling and hardware constraints.
