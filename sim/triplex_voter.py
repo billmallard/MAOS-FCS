@@ -5,7 +5,7 @@ mid-value select output and flags outlier lanes.
 """
 
 from dataclasses import dataclass
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,16 @@ class VoteResult:
     failed_lanes: Tuple[str, ...]
     active_lanes: Tuple[str, ...]
     mode: str
+
+
+@dataclass(frozen=True)
+class ModeTransitionEvent:
+    """State transition event with reason code for logging."""
+
+    previous_mode: str
+    new_mode: str
+    reason_code: str
+    failed_lanes: Tuple[str, ...]
 
 
 def _median_of_three(a: float, b: float, c: float) -> float:
@@ -85,6 +95,31 @@ def inject_lane_bias(samples: Iterable[LaneSample], lane_id: str, bias: float) -
         else:
             out.append(sample)
     return out
+
+
+def detect_mode_transition(previous_mode: str, result: VoteResult) -> Optional[ModeTransitionEvent]:
+    """Return transition event if mode changed, else None."""
+
+    if previous_mode == result.mode:
+        return None
+
+    if result.mode == "failsafe":
+        reason = "insufficient_healthy_lanes"
+    elif result.mode == "degraded":
+        reason = "lane_disagreement_detected"
+    elif result.mode == "duplex":
+        reason = "single_lane_unhealthy"
+    elif previous_mode in ("degraded", "duplex", "failsafe") and result.mode == "triplex":
+        reason = "all_lanes_recovered"
+    else:
+        reason = "mode_change"
+
+    return ModeTransitionEvent(
+        previous_mode=previous_mode,
+        new_mode=result.mode,
+        reason_code=reason,
+        failed_lanes=result.failed_lanes,
+    )
 
 
 def run_demo() -> None:

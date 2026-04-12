@@ -1,6 +1,6 @@
 import unittest
 
-from triplex_voter import LaneSample, inject_lane_bias, vote_triplex
+from triplex_voter import detect_mode_transition, LaneSample, inject_lane_bias, vote_triplex
 
 
 class TriplexVoterTests(unittest.TestCase):
@@ -70,6 +70,37 @@ class TriplexVoterTests(unittest.TestCase):
         self.assertAlmostEqual(injected[0].command, 0.10, places=6)
         self.assertAlmostEqual(injected[1].command, 0.31, places=6)
         self.assertAlmostEqual(injected[2].command, 0.12, places=6)
+
+    def test_transition_to_degraded_has_reason_code(self) -> None:
+        # Covers FCS-DEG-003 reason-code behavior.
+        result = vote_triplex(
+            [
+                LaneSample("A", 0.10),
+                LaneSample("B", 0.09),
+                LaneSample("C", 0.60),
+            ],
+            disagreement_threshold=0.08,
+        )
+        event = detect_mode_transition("triplex", result)
+        self.assertIsNotNone(event)
+        assert event is not None
+        self.assertEqual(event.previous_mode, "triplex")
+        self.assertEqual(event.new_mode, "degraded")
+        self.assertEqual(event.reason_code, "lane_disagreement_detected")
+
+    def test_transition_to_triplex_recovery_reason(self) -> None:
+        result = vote_triplex(
+            [
+                LaneSample("A", 0.10),
+                LaneSample("B", 0.11),
+                LaneSample("C", 0.12),
+            ],
+            disagreement_threshold=0.08,
+        )
+        event = detect_mode_transition("degraded", result)
+        self.assertIsNotNone(event)
+        assert event is not None
+        self.assertEqual(event.reason_code, "all_lanes_recovered")
 
 
 if __name__ == "__main__":
