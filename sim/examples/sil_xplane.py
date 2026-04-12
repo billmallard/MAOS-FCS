@@ -56,6 +56,7 @@ from control_arch import FixedCommandProvider, FlightState, ProviderRegistry
 from control_law_engine import AircraftState, apply_protections, load_protection_config
 from event_log import EventLogger
 from fcs_runtime import FcsRuntime
+from gust_alleviation_provider import GustAlleviationProvider
 from triplex_voter import LaneSample
 from xplane_bridge import XPlaneCommandSink, XPlaneControlProvider, XPlaneStateSource
 
@@ -77,6 +78,7 @@ XPLANE_HOST = os.environ.get("XPLANE_HOST", "127.0.0.1")
 SIL_HZ      = int(os.environ.get("SIL_HZ", "20"))
 SIL_CYCLES  = int(os.environ.get("SIL_CYCLES", "200"))
 SIL_LOG     = os.environ.get("SIL_LOG", _DEFAULT_LOG)
+SIL_ENABLE_GUST = os.environ.get("SIL_ENABLE_GUST", "0").lower() in ("1", "true", "yes")
 
 
 def _make_synthetic_lanes(pitch: float, roll: float, yaw: float) -> list[LaneSample]:
@@ -144,6 +146,12 @@ def run_sil_loop(
         state_source=xp_source,
     )
     registry.register(xp_provider)
+
+    # Optional gust alleviation provider (Phase 1.5)
+    if SIL_ENABLE_GUST:
+        gust_provider = GustAlleviationProvider(priority=60)
+        registry.register(gust_provider)
+        print("[SIL] Gust alleviation enabled (priority 60)")
 
     if not dry_run and xp_source is not None:
         print(f"[SIL] Connecting to X-Plane at {xplane_host}...")
