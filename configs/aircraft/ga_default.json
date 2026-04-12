@@ -1,0 +1,8 @@
+{
+  "aircraft_name": "MAOS-GA-001",
+  "description": "Baseline general-aviation aircraft using position-mode generic servos on all primary axes.",
+  "active_profiles": [
+    "generic-servo"
+  ],
+  "_comment": "vendor_key values must match the vendor_key field in configs/actuator_profiles/*.json"
+}

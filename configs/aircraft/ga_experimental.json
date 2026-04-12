@@ -1,0 +1,10 @@
+{
+  "aircraft_name": "MAOS-GA-EXP",
+  "description": "Experimental GA variant: smart EMAs on primary axes, generic servo on flaps, FADEC bridge on thrust.",
+  "active_profiles": [
+    "smart-ema",
+    "generic-servo",
+    "fadec-bridge"
+  ],
+  "_comment": "When multiple profiles cover the same axis, the first profile listed takes priority."
+}

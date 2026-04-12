@@ -52,6 +52,13 @@ These requirements cover:
 - FCS-ACT-008: Actuator feedback monitoring shall detect persistent communication timeouts and surface degradation events.
 - FCS-ACT-009: Actuator feedback monitoring shall detect position mismatch and overtemperature conditions against configurable thresholds.
 
+### Aircraft configuration
+
+- FCS-ACF-001: The system shall load aircraft-level configuration from a JSON file that specifies the ordered set of active actuator profiles.
+- FCS-ACF-002: Actuator profile selection shall be deterministic: when multiple profiles cover the same axis, the first profile listed in the aircraft config shall take priority.
+- FCS-ACF-003: The aircraft config loader shall fail loudly with a descriptive error if a referenced profile file is missing or its vendor_key mismatches.
+- FCS-ACF-004: At least two aircraft config examples shall be provided (baseline GA and experimental variant).
+
 ### Configurable control laws
 
 - FCS-LAW-001: The system shall load control-law protection limits from user-editable configuration files.

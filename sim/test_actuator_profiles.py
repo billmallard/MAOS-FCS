@@ -27,7 +27,7 @@ class ActuatorProfileTests(unittest.TestCase):
 
     def test_fadec_thrust_profile_maps_future_axis(self) -> None:
         # Covers FCS-ACT-007, FCS-AXIS-003, FCS-VER-009.
-        profile = load_profile(os.path.join("configs", "actuator_profiles", "fadec_thrust_bridge.json"))
+        profile = load_profile(os.path.join("configs", "actuator_profiles", "fadec_bridge.json"))
         cmds = map_axis_commands_to_actuators(profile, axis_commands={"thrust": 0.8}, sequence=9)
         self.assertEqual(len(cmds), 1)
         self.assertEqual(cmds[0].actuator_id, 21)

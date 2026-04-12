@@ -1,5 +1,5 @@
 {
-  "profile_name": "fadec_thrust_bridge",
+  "profile_name": "fadec-bridge",
   "description": "Bridge profile for future thrust-axis integration with FADEC-like systems.",
   "vendor_key": "fadec-bridge",
   "default_mode": "effort",

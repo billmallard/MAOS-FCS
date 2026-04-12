@@ -22,7 +22,7 @@ This architecture defines profile adapters that map generic axis commands to spe
 
 - generic_servo: baseline smart servo mapping for pitch/roll/yaw/flap
 - smart_ema: higher-authority electromechanical mapping with rate mode
-- fadec_thrust_bridge: future thrust axis mapping for FADEC bridge integration
+- fadec_bridge: future thrust axis mapping for FADEC bridge integration (vendor_key: fadec-bridge)
 
 ## Runtime flow
 
