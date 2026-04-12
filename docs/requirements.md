@@ -104,6 +104,12 @@ These requirements cover:
 - FCS-SIL-005: SIL events shall be logged in the same JSONL format used by hardware-in-the-loop and simulation test runs.
 - FCS-SIL-006: The SIL driver shall operate in dry-run mode (no network sockets) for automated CI verification without a live simulator.
 
+## Test Matrix & Roadmap
+
+Concrete first-pass SIL test scenarios are defined in [SIL Phase-1 Test Matrix](sil_phase1_test_matrix.md).
+
+High-fidelity simulation phases (actuator dynamics, sensor faults, bus timing, etc.) are planned in [SIL Fidelity Evolution Roadmap](sil_fidelity_roadmap.md).
+
 ## Notes
 
 - This is a draft baseline for experimental development and will evolve with plant modeling and hardware constraints.

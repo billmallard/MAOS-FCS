@@ -1,0 +1,141 @@
+name: C Firmware Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'firmware/fcc/**'
+      - '.github/workflows/c-build.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'firmware/fcc/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: GCC x86_64
+            cc: gcc
+            cxx: g++
+          - name: Clang x86_64
+            cc: clang
+            cxx: clang++
+
+    name: Build (${{ matrix.name }})
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ${{ matrix.cc }} ${{ matrix.cxx }}
+
+      - name: Configure CMake
+        run: |
+          cmake -S firmware/fcc -B firmware/fcc/build \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cmake --build firmware/fcc/build --config Release
+
+      - name: Run tests
+        run: |
+          cd firmware/fcc/build
+          ctest --output-on-failure --verbose
+
+      - name: Upload test results (if failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-${{ matrix.name }}
+          path: firmware/fcc/build/Testing
+
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          cd sim && for f in requirements*.txt; do [ -f "$f" ] && pip install -r "$f"; done || true
+
+      - name: Run Python unit tests
+        run: |
+          cd sim/..
+          python -m unittest discover -s sim -p "test_*.py" -v
+
+      - name: Run SIL dry-run smoke test
+        run: |
+          python sim/examples/sil_xplane.py
+
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Lint with flake8 (warnings only)
+        run: |
+          python -m pip install flake8
+          # E501 = line too long, W503 = line break before operator
+          flake8 sim --count --select=E9,F63,F7,F82 --show-source --statistics --exit-zero
+
+  coverage-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Run Python tests with coverage
+        run: |
+          python -m pip install coverage
+          cd sim/..
+          coverage run -m unittest discover -s sim -p "test_*.py"
+          coverage report -m --skip-empty
+          coverage html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov
+
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate markdown files
+        run: |
+          # Basic markdown link validation
+          find docs -name "*.md" -exec grep -H "\[.*\](.*)" {} \; | head -20
+
+      - name: Check for dead doc links (basic)
+        run: |
+          # Simple check for common mistakes
+          grep -r "404" docs/ || echo "No obvious 404 references found"
