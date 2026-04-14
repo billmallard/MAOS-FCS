@@ -2,6 +2,16 @@
 
 Open-source Fly-By-Wire Flight Control System for MAOS aircraft concepts.
 
+## Role in MAOS Multi-Project Architecture
+
+This repository owns the flight-control domain for the MAOS program.
+
+- It is not the airframe authority (MAOS-DESIGN owns geometric and aircraft-level configuration baselines).
+- It is not the ECS authority (MAOS-ECS owns thermal and pressurization subsystem design).
+- It is responsible for FCS requirements, interfaces, implementation, and verification artifacts.
+
+The repo split is intentional: each subsystem can progress independently while integration happens through explicit, versioned interfaces.
+
 ## Status
 
 Concept and architecture phase.
@@ -14,7 +24,7 @@ This project targets the Experimental Amateur-Built category. FAA certification 
 
 ## Mission
 
-Build a practical, open-source, certifiable-style Flight Control System (FCS) architecture with:
+Build a practical, open-source, certification-informed Flight Control System (FCS) architecture with:
 
 - Triplex flight control computers (FCC-A, FCC-B, FCC-C)
 - Redundant sensors and air data
@@ -178,6 +188,19 @@ Planned layout:
 - docs  Architecture, safety, interface specs
 - configs  User-tunable control-law profiles
 
+## Interface-First Integration Rules
+
+Before major feature work, freeze and version these interfaces:
+
+- Control input/output units, signs, rates, and saturation semantics.
+- Timing contracts (publish/subscribe rates, jitter budgets, timeout behavior).
+- Fault semantics (degraded mode triggers, lane health states, fail-operational/fail-safe transitions).
+- Logging and event taxonomies used by SIL/HIL and incident replay tools.
+
+Cross-repo integration should depend on these contracts, not on implicit behavior.
+
+Starter template: `INTERFACE_CONTROL_DOCUMENT_TEMPLATE.md`
+
 ## Verification Strategy
 
 - Unit tests for control primitives and protocol parsing
@@ -245,6 +268,17 @@ Safety cleanup controls:
 - `--cleanup-target-altitude-ft 2000` target climb altitude for cleanup guidance
 - `--pause-on-exit` pause simulator at end of campaign (enabled by default)
 
+## Licensing
+
+This repository uses a dual-license model:
+
+- Source code: PolyForm Noncommercial 1.0.0 (`LICENSE-CODE`)
+- Documentation and non-code design content: CC BY-NC-SA 4.0 (`LICENSE-DOCS`)
+
+Commercial use is not granted by default. For commercial licensing, contact `contact@aerocommons.org`.
+
+Contribution and file classification guidance: `CONTRIBUTING.md`
+
 ## Security Scanning and Secret Hygiene
 
 - GitHub CodeQL SAST runs via CI on push, pull request, and weekly schedule.
@@ -264,20 +298,24 @@ Use these as best-practice references, not as claims of certification or complia
 
 See CLAUDE.md for project policy language on certification scope and documentation constraints.
 
-## First coding milestone (M1)
+## Current Milestone State (As of 2026-04-14)
 
-Build a deterministic triplex command-voting prototype that runs in simulation:
+Recent completed milestone:
 
-1. Simulate 3 FCC lanes producing elevator command.
-2. Implement mid-value select and fault detection thresholds.
-3. Inject one faulty lane and verify correct isolation.
-4. Export logs and pass/fail report.
+- Deterministic X-Plane SIL reset-per-scenario flow implemented.
+- Airborne post-reset initialization path implemented.
+- Readiness classification and infra-failure semantics implemented.
+- Campaign summary artifacts standardized (`campaign_summary.json`, `campaign_summary.md`, `summary.json`).
 
-This milestone establishes the core redundancy behavior before hardware lock-in.
+Primary current gap:
 
-## Immediate next steps
+- Propulsion-state initialization after airborne reset needs hardening for longer-duration scenario energy stability.
 
-1. Add actuator command/feedback wire format and codec tests.
-2. Add simulation event log emitter with transition and reason codes.
-3. Start firmware/fcc scheduler scaffold and protocol stubs.
-4. Add more avionics adapters beyond generic ingress (bridge-based first).
+Near-term execution milestones:
+
+1. Add throttle/energy hold in post-reset airborne initialization path.
+2. Extend scenario duration windows after propulsion stabilization.
+3. Re-run Robot manifest reset suite and verify PASS in `output.xml`.
+4. Validate self-hosted `workflow_dispatch` campaign run and artifact upload end-to-end.
+
+Reference handoff: `docs/CLAUDE_HANDOFF_2026-04-14.md`.
