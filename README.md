@@ -268,6 +268,10 @@ Safety cleanup controls:
 - `--cleanup-target-altitude-ft 2000` target climb altitude for cleanup guidance
 - `--pause-on-exit` pause simulator at end of campaign (enabled by default)
 
+## Knowledge Migration
+
+- Article-derived subsystem migration notes: `docs/ARTICLE_KNOWLEDGE_MIGRATION_2026Q2.md`
+
 ## Licensing
 
 This repository uses a dual-license model:
