@@ -298,6 +298,185 @@ def _set_dataref_value(host: str, port: int, dataref_name: str, value: float) ->
     resp.raise_for_status()
 
 
+def _get_first_available_dataref_value(
+    host: str,
+    port: int,
+    dataref_names: List[str],
+) -> float | None:
+    for name in dataref_names:
+        value = _get_dataref_value(host, port, name)
+        if value is not None:
+            return value
+    return None
+
+
+def _set_first_available_dataref_value(
+    host: str,
+    port: int,
+    dataref_names: List[str],
+    value: float,
+) -> str:
+    last_error: str | None = None
+    for name in dataref_names:
+        try:
+            _set_dataref_value(host, port, name, value)
+            return name
+        except Exception as exc:
+            last_error = str(exc)
+            continue
+    if last_error is None:
+        last_error = "no candidate datarefs provided"
+    raise RuntimeError(last_error)
+
+
+def _apply_post_reset_propulsion_state(
+    host: str,
+    port: int,
+    *,
+    throttle_ratio: float,
+    mixture_ratio: float | None = None,
+    hold_s: float = 0.0,
+) -> None:
+    """Apply best-effort throttle/mixture state after reset and teleport."""
+
+    throttle = max(0.0, min(1.0, float(throttle_ratio)))
+    throttle_targets = [
+        "sim/cockpit2/engine/actuators/throttle_ratio_all",
+        "sim/cockpit2/engine/actuators/throttle_ratio[0]",
+        "sim/cockpit2/engine/actuators/throttle_ratio",
+    ]
+    used_throttle = _set_first_available_dataref_value(host, port, throttle_targets, throttle)
+
+    mixture_targets = [
+        "sim/cockpit2/engine/actuators/mixture_ratio_all",
+        "sim/cockpit2/engine/actuators/mixture_ratio[0]",
+        "sim/cockpit2/engine/actuators/mixture_ratio",
+    ]
+    used_mixture = ""
+    if mixture_ratio is not None:
+        mixture = max(0.0, min(1.0, float(mixture_ratio)))
+        used_mixture = _set_first_available_dataref_value(host, port, mixture_targets, mixture)
+
+    if hold_s > 0:
+        end_t = time.monotonic() + hold_s
+        while time.monotonic() < end_t:
+            try:
+                _set_first_available_dataref_value(host, port, throttle_targets, throttle)
+                if mixture_ratio is not None:
+                    _set_first_available_dataref_value(host, port, mixture_targets, mixture)
+            except Exception:
+                break
+            time.sleep(0.25)
+
+    rpm_readbacks = [
+        "sim/cockpit2/engine/indicators/engine_speed_rpm[0]",
+        "sim/cockpit2/engine/indicators/engine_speed_rpm",
+        "sim/flightmodel/engine/ENGN_N2_[0]",
+    ]
+    observed_rpm = _get_first_available_dataref_value(host, port, rpm_readbacks)
+    if observed_rpm is None:
+        print(
+            "[campaign] propulsion init: "
+            f"throttle={throttle:.2f} via {used_throttle}"
+            + ("" if not used_mixture else f" mixture via {used_mixture}")
+        )
+    else:
+        print(
+            "[campaign] propulsion init: "
+            f"throttle={throttle:.2f} via {used_throttle} rpm={observed_rpm:.0f}"
+            + ("" if not used_mixture else f" mixture via {used_mixture}")
+        )
+
+
+def _active_recovery_hold(
+    host: str,
+    port: int,
+    *,
+    duration_s: float,
+    rate_hz: float,
+    target_pitch_deg: float,
+    throttle_ratio: float,
+    mixture_ratio: float | None,
+    override_controls: bool,
+) -> None:
+    """Actively hold wings-level and shallow climb after unpause.
+
+    This dampens upset recurrence when one-shot paused-state writes do not persist
+    once physics resumes.
+    """
+
+    dt = 1.0 / max(1.0, rate_hz)
+    steps = max(1, int(duration_s * rate_hz))
+
+    if override_controls:
+        for dr in (
+            "sim/operation/override/override_joystick",
+            "sim/operation/override/override_joystick_pitch",
+            "sim/operation/override/override_joystick_roll",
+            "sim/operation/override/override_joystick_heading",
+        ):
+            try:
+                _set_dataref_value(host, port, dr, 1.0)
+            except Exception:
+                continue
+
+    for i in range(steps):
+        phi = _get_dataref_value(host, port, "sim/flightmodel/position/phi")
+        theta = _get_dataref_value(host, port, "sim/flightmodel/position/theta")
+        ias = _get_dataref_value(host, port, "sim/cockpit2/gauges/indicators/airspeed_kts_pilot")
+        if phi is None or theta is None or ias is None:
+            print("[campaign] preflight recovery: telemetry unavailable; stopping active hold")
+            break
+
+        roll_error = -phi
+        pitch_error = target_pitch_deg - theta
+
+        roll_cmd = max(-0.45, min(0.45, 0.020 * roll_error))
+        pitch_cmd = max(-0.35, min(0.35, 0.030 * pitch_error))
+
+        try:
+            _set_dataref_value(host, port, "sim/cockpit2/controls/yoke_roll_ratio", roll_cmd)
+            _set_dataref_value(host, port, "sim/cockpit2/controls/yoke_pitch_ratio", pitch_cmd)
+            _set_dataref_value(host, port, "sim/cockpit2/controls/yoke_heading_ratio", 0.0)
+            _set_dataref_value(host, port, "sim/cockpit2/controls/aileron_trim", 0.0)
+            _set_dataref_value(host, port, "sim/cockpit2/controls/elevator_trim", 0.0)
+            _set_dataref_value(host, port, "sim/cockpit2/controls/rudder_trim", 0.0)
+        except Exception:
+            pass
+
+        throttle_targets = [
+            "sim/cockpit2/engine/actuators/throttle_ratio_all",
+            "sim/cockpit2/engine/actuators/throttle_ratio[0]",
+            "sim/cockpit2/engine/actuators/throttle_ratio",
+        ]
+        try:
+            _set_first_available_dataref_value(host, port, throttle_targets, throttle_ratio)
+        except Exception:
+            pass
+
+        if mixture_ratio is not None:
+            mixture_targets = [
+                "sim/cockpit2/engine/actuators/mixture_ratio_all",
+                "sim/cockpit2/engine/actuators/mixture_ratio[0]",
+                "sim/cockpit2/engine/actuators/mixture_ratio",
+            ]
+            try:
+                _set_first_available_dataref_value(host, port, mixture_targets, mixture_ratio)
+            except Exception:
+                pass
+
+        if (i % max(1, int(rate_hz))) == 0:
+            print(
+                f"[campaign] preflight recovery t={i*dt:4.1f}s "
+                f"phi={phi:+6.2f} theta={theta:+6.2f} IAS={ias:6.1f} "
+                f"cmd_roll={roll_cmd:+.3f} cmd_pitch={pitch_cmd:+.3f}"
+            )
+
+        time.sleep(dt)
+
+    print("[campaign] preflight recovery: active hold complete")
+
+
 def stabilize_and_climb(
     host: str,
     port: int,
@@ -550,6 +729,46 @@ def main() -> int:
         default="default",
         help="Campaign size: default for full run, smoke for short verification",
     )
+    parser.add_argument(
+        "--preflight-active-recovery",
+        action="store_true",
+        help="Before each scenario, run an active hold loop for wings-level shallow-climb recovery.",
+    )
+    parser.add_argument(
+        "--preflight-recovery-duration-s",
+        type=float,
+        default=20.0,
+        help="Duration in seconds for preflight active recovery hold.",
+    )
+    parser.add_argument(
+        "--preflight-recovery-rate-hz",
+        type=float,
+        default=15.0,
+        help="Loop rate for preflight active recovery hold.",
+    )
+    parser.add_argument(
+        "--preflight-target-pitch-deg",
+        type=float,
+        default=2.0,
+        help="Target pitch for preflight active recovery hold.",
+    )
+    parser.add_argument(
+        "--preflight-throttle-ratio",
+        type=float,
+        default=0.68,
+        help="Throttle ratio maintained during preflight active recovery hold.",
+    )
+    parser.add_argument(
+        "--preflight-mixture-ratio",
+        type=float,
+        default=1.0,
+        help="Mixture ratio maintained during preflight active recovery hold.",
+    )
+    parser.add_argument(
+        "--preflight-override-controls",
+        action="store_true",
+        help="Enable X-Plane joystick control override during preflight active recovery hold.",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -567,9 +786,23 @@ def main() -> int:
     reset_request_timeout_s = 90.0
     reset_retries = 2
     airborne_after_reset = False
+    airborne_each_run = False
+    pause_during_airborne_setup = True
     airborne_altitude_agl_ft = 3000.0
     airborne_airspeed_kias = 100.0
     airborne_wait_s = 3.0
+    post_reset_throttle_ratio: float | None = None
+    post_reset_mixture_ratio: float | None = None
+    post_reset_propulsion_hold_s = 0.0
+    preflight_active_recovery = bool(args.preflight_active_recovery)
+    preflight_recovery_duration_s = float(args.preflight_recovery_duration_s)
+    preflight_recovery_rate_hz = float(args.preflight_recovery_rate_hz)
+    preflight_target_pitch_deg = float(args.preflight_target_pitch_deg)
+    preflight_throttle_ratio = max(0.0, min(1.0, float(args.preflight_throttle_ratio)))
+    preflight_mixture_ratio: float | None = max(
+        0.0, min(1.0, float(args.preflight_mixture_ratio))
+    )
+    preflight_override_controls = bool(args.preflight_override_controls)
 
     scenarios: List[Dict[str, Any]]
     if args.manifest:
@@ -588,6 +821,10 @@ def main() -> int:
         )
         reset_retries = int(manifest.get("reset_retries", reset_retries))
         airborne_after_reset = bool(manifest.get("airborne_after_reset", airborne_after_reset))
+        airborne_each_run = bool(manifest.get("airborne_each_run", airborne_each_run))
+        pause_during_airborne_setup = bool(
+            manifest.get("pause_during_airborne_setup", pause_during_airborne_setup)
+        )
         airborne_altitude_agl_ft = float(
             manifest.get("airborne_altitude_agl_ft", airborne_altitude_agl_ft)
         )
@@ -595,6 +832,37 @@ def main() -> int:
             manifest.get("airborne_airspeed_kias", airborne_airspeed_kias)
         )
         airborne_wait_s = float(manifest.get("airborne_wait_s", airborne_wait_s))
+        if "post_reset_throttle_ratio" in manifest:
+            post_reset_throttle_ratio = float(manifest["post_reset_throttle_ratio"])
+        if "post_reset_mixture_ratio" in manifest:
+            post_reset_mixture_ratio = float(manifest["post_reset_mixture_ratio"])
+        post_reset_propulsion_hold_s = float(
+            manifest.get("post_reset_propulsion_hold_s", post_reset_propulsion_hold_s)
+        )
+        preflight_active_recovery = bool(
+            manifest.get("preflight_active_recovery", preflight_active_recovery)
+        )
+        preflight_recovery_duration_s = float(
+            manifest.get("preflight_recovery_duration_s", preflight_recovery_duration_s)
+        )
+        preflight_recovery_rate_hz = float(
+            manifest.get("preflight_recovery_rate_hz", preflight_recovery_rate_hz)
+        )
+        preflight_target_pitch_deg = float(
+            manifest.get("preflight_target_pitch_deg", preflight_target_pitch_deg)
+        )
+        preflight_throttle_ratio = max(
+            0.0,
+            min(
+                1.0,
+                float(manifest.get("preflight_throttle_ratio", preflight_throttle_ratio)),
+            ),
+        )
+        if "preflight_mixture_ratio" in manifest:
+            preflight_mixture_ratio = max(0.0, min(1.0, float(manifest["preflight_mixture_ratio"])))
+        preflight_override_controls = bool(
+            manifest.get("preflight_override_controls", preflight_override_controls)
+        )
         scenarios = [dict(s) for s in manifest["scenarios"]]
         print(f"[campaign] using manifest: {manifest_path}")
     else:
@@ -744,7 +1012,69 @@ def main() -> int:
                     except Exception as exc:
                         print(f"[campaign] warning: airborne teleport failed: {exc}")
 
+                if post_reset_throttle_ratio is not None:
+                    try:
+                        _apply_post_reset_propulsion_state(
+                            host,
+                            port,
+                            throttle_ratio=post_reset_throttle_ratio,
+                            mixture_ratio=post_reset_mixture_ratio,
+                            hold_s=post_reset_propulsion_hold_s,
+                        )
+                    except Exception as exc:
+                        print(f"[campaign] warning: propulsion init failed: {exc}")
+
+            if readiness_ok and airborne_each_run:
+                if pause_during_airborne_setup:
+                    try:
+                        force_pause(host, port)
+                    except Exception as exc:
+                        print(f"[campaign] warning: could not pause before airborne setup: {exc}")
+
+                try:
+                    _teleport_airborne(
+                        host,
+                        port,
+                        altitude_agl_ft=airborne_altitude_agl_ft,
+                        airspeed_kias=airborne_airspeed_kias,
+                        wait_s=airborne_wait_s,
+                    )
+                except Exception as exc:
+                    print(f"[campaign] warning: airborne_each_run teleport failed: {exc}")
+
+                if post_reset_throttle_ratio is not None:
+                    try:
+                        _apply_post_reset_propulsion_state(
+                            host,
+                            port,
+                            throttle_ratio=post_reset_throttle_ratio,
+                            mixture_ratio=post_reset_mixture_ratio,
+                            hold_s=post_reset_propulsion_hold_s,
+                        )
+                    except Exception as exc:
+                        print(f"[campaign] warning: airborne_each_run propulsion init failed: {exc}")
+
+                if pause_during_airborne_setup:
+                    try:
+                        force_unpause(host, port)
+                    except Exception as exc:
+                        print(f"[campaign] warning: could not unpause after airborne setup: {exc}")
+
             if readiness_ok:
+                if preflight_active_recovery:
+                    try:
+                        _active_recovery_hold(
+                            host,
+                            port,
+                            duration_s=preflight_recovery_duration_s,
+                            rate_hz=preflight_recovery_rate_hz,
+                            target_pitch_deg=preflight_target_pitch_deg,
+                            throttle_ratio=preflight_throttle_ratio,
+                            mixture_ratio=preflight_mixture_ratio,
+                            override_controls=preflight_override_controls,
+                        )
+                    except Exception as exc:
+                        print(f"[campaign] warning: preflight active recovery failed: {exc}")
                 rc = run_one_sil(repo_root, host, scenario, log_path)
                 ok = rc == 0
                 status = "PASS" if ok else "FAIL"
@@ -791,6 +1121,21 @@ def main() -> int:
         "reset_wait_s": reset_wait_s,
         "reset_request_timeout_s": reset_request_timeout_s,
         "reset_retries": reset_retries,
+        "airborne_after_reset": airborne_after_reset,
+        "airborne_each_run": airborne_each_run,
+        "pause_during_airborne_setup": pause_during_airborne_setup,
+        "airborne_altitude_agl_ft": airborne_altitude_agl_ft,
+        "airborne_airspeed_kias": airborne_airspeed_kias,
+        "post_reset_throttle_ratio": post_reset_throttle_ratio,
+        "post_reset_mixture_ratio": post_reset_mixture_ratio,
+        "post_reset_propulsion_hold_s": post_reset_propulsion_hold_s,
+        "preflight_active_recovery": preflight_active_recovery,
+        "preflight_recovery_duration_s": preflight_recovery_duration_s,
+        "preflight_recovery_rate_hz": preflight_recovery_rate_hz,
+        "preflight_target_pitch_deg": preflight_target_pitch_deg,
+        "preflight_throttle_ratio": preflight_throttle_ratio,
+        "preflight_mixture_ratio": preflight_mixture_ratio,
+        "preflight_override_controls": preflight_override_controls,
         "startup_flight_defined": startup_flight is not None,
         "reason_counts": reason_counts,
         "results": summary,

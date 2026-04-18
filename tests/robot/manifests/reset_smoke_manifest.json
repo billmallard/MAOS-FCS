@@ -10,6 +10,9 @@
   "airborne_altitude_agl_ft": 3000,
   "airborne_airspeed_kias": 100,
   "airborne_wait_s": 3,
+  "post_reset_throttle_ratio": 0.70,
+  "post_reset_mixture_ratio": 1.0,
+  "post_reset_propulsion_hold_s": 4.0,
   "startup_flight": {
     "aircraft": {
       "path": "Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP.acf"
