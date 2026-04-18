@@ -477,6 +477,103 @@ def _active_recovery_hold(
     print("[campaign] preflight recovery: active hold complete")
 
 
+def _inject_scenario_position(
+    host: str,
+    port: int,
+    *,
+    lat_deg: float,
+    lon_deg: float,
+    heading_deg: float = 90.0,
+    airspeed_kias: float = 100.0,
+    init_pitch_deg: float = 3.0,
+    settle_s: float = 2.0,
+) -> None:
+    """Move the aircraft to a specific lat/lon with a clean, repeatable initial state.
+
+    Pauses the sim before writing any datarefs so all state changes land
+    atomically from the physics engine's perspective, then unpauses and waits
+    for the flight model to settle.  This prevents the violent heading snap and
+    airspeed collapse that occur when position/attitude are changed mid-flight.
+
+    X-Plane's Web API does not allow writing latitude/longitude directly (403).
+    Uses local_x/local_z delta relative to the current position instead.
+
+    State written while paused:
+      local_x, local_z         — lateral position (meters delta from current)
+      psi                      — heading (degrees true)
+      phi                      — bank angle → 0°
+      theta                    — pitch angle → init_pitch_deg
+      local_vx, local_vy,      — velocity vector matching heading at airspeed_kias
+      local_vz
+      elv_trim, ail_trim,      — all trim surfaces → 0 (neutral)
+      rud_trim
+
+    local frame: +x = East, +y = Up, +z = South (−z = North)
+    """
+    import math
+
+    # Pause first so all writes reach X-Plane's physics engine atomically.
+    force_pause(host, port)
+
+    try:
+        cur_lat = _get_dataref_value(host, port, "sim/flightmodel/position/latitude")
+        cur_lon = _get_dataref_value(host, port, "sim/flightmodel/position/longitude")
+        cur_x   = _get_dataref_value(host, port, "sim/flightmodel/position/local_x")
+        cur_z   = _get_dataref_value(host, port, "sim/flightmodel/position/local_z")
+
+        if any(v is None for v in (cur_lat, cur_lon, cur_x, cur_z)):
+            raise RuntimeError("Could not read current position datarefs for injection")
+
+        dlat = lat_deg - cur_lat
+        dlon = lon_deg - cur_lon
+        m_per_deg_lat = 111320.0
+        m_per_deg_lon = 111320.0 * math.cos(math.radians(cur_lat))
+
+        new_x = cur_x + dlon * m_per_deg_lon
+        new_z = cur_z - dlat * m_per_deg_lat  # +z = South, northward delta → negative z
+
+        # Position
+        _set_dataref_value(host, port, "sim/flightmodel/position/local_x", new_x)
+        _set_dataref_value(host, port, "sim/flightmodel/position/local_z", new_z)
+
+        # Attitude: heading, level wings, shallow climb pitch
+        _set_dataref_value(host, port, "sim/flightmodel/position/psi",   heading_deg)
+        _set_dataref_value(host, port, "sim/flightmodel/position/phi",   0.0)
+        _set_dataref_value(host, port, "sim/flightmodel/position/theta", init_pitch_deg)
+
+        # Velocity vector matching heading and target airspeed
+        speed_ms    = airspeed_kias * 0.514444
+        heading_rad = math.radians(heading_deg)
+        _set_dataref_value(host, port, "sim/flightmodel/position/local_vx",  speed_ms * math.sin(heading_rad))
+        _set_dataref_value(host, port, "sim/flightmodel/position/local_vy",  0.0)
+        _set_dataref_value(host, port, "sim/flightmodel/position/local_vz", -speed_ms * math.cos(heading_rad))
+
+        # Neutral trim — prevents residual FCS trim from the previous scenario
+        for dref in (
+            "sim/flightmodel/controls/elv_trim",
+            "sim/flightmodel/controls/ail_trim",
+            "sim/flightmodel/controls/rud_trim",
+        ):
+            try:
+                _set_dataref_value(host, port, dref, 0.0)
+            except Exception:
+                pass
+
+        dist_km = math.sqrt((dlat * 111.32) ** 2 + (dlon * m_per_deg_lon / 1000) ** 2)
+        print(
+            f"[campaign] position inject: target=({lat_deg:.5f},{lon_deg:.5f}) "
+            f"hdg={heading_deg:.0f}° pitch={init_pitch_deg:.1f}° IAS={airspeed_kias:.0f}kts "
+            f"dist={dist_km:.1f}km from ({cur_lat:.5f},{cur_lon:.5f})"
+        )
+
+    finally:
+        # Always unpause even if a write failed — sim must not be left stuck paused.
+        force_unpause(host, port)
+
+    if settle_s > 0:
+        time.sleep(settle_s)
+
+
 def stabilize_and_climb(
     host: str,
     port: int,
@@ -666,6 +763,9 @@ def run_one_sil(repo_root: Path, host: str, scenario: Dict[str, Any], log_path: 
     ]
     if scenario.get("gust", False):
         cmd.append("--gust")
+    extra = scenario.get("extra_sil_args", [])
+    if extra:
+        cmd.extend([str(a) for a in extra])
 
     print(
         "[campaign] start",
@@ -1011,6 +1111,21 @@ def main() -> int:
                         )
                     except Exception as exc:
                         print(f"[campaign] warning: airborne teleport failed: {exc}")
+
+                    if scenario.get("init_lat") is not None and scenario.get("init_lon") is not None:
+                        try:
+                            _inject_scenario_position(
+                                host,
+                                port,
+                                lat_deg=float(scenario["init_lat"]),
+                                lon_deg=float(scenario["init_lon"]),
+                                heading_deg=float(scenario.get("init_heading_deg", 90.0)),
+                                airspeed_kias=airborne_airspeed_kias,
+                                init_pitch_deg=float(scenario.get("init_pitch_deg", 3.0)),
+                                settle_s=float(scenario.get("init_position_wait_s", 2.0)),
+                            )
+                        except Exception as exc:
+                            print(f"[campaign] warning: position inject failed: {exc}")
 
                 if post_reset_throttle_ratio is not None:
                     try:

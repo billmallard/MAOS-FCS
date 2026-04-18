@@ -65,6 +65,8 @@ _DATAREF_READ_NAMES = {
     "bank": "sim/flightmodel/position/phi",
     "pitch": "sim/flightmodel/position/theta",
     "alpha": "sim/flightmodel/position/alpha",
+    "lat": "sim/flightmodel/position/latitude",
+    "lon": "sim/flightmodel/position/longitude",
 }
 
 _DATAREF_WRITE_NAMES = {
@@ -86,6 +88,8 @@ class XPlaneWebAPIState:
     bank_deg: float = 0.0
     pitch_deg: float = 0.0
     alpha_deg: float = 0.0
+    lat_deg: Optional[float] = None
+    lon_deg: Optional[float] = None
     last_update_monotonic: float = 0.0
 
     def is_fresh(self, max_age_s: float = 0.5) -> bool:
@@ -223,6 +227,10 @@ class XPlaneWebAPIStateSource:
                         new_state.pitch_deg = float(value)
                     elif key == "alpha":
                         new_state.alpha_deg = float(value)
+                    elif key == "lat":
+                        new_state.lat_deg = float(value)
+                    elif key == "lon":
+                        new_state.lon_deg = float(value)
                 
                 except Exception:
                     pass  # Keep previous value on error

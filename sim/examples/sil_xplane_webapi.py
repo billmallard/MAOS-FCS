@@ -27,6 +27,7 @@ import argparse
 import os
 import sys
 import time
+from typing import Optional
 
 # Allow running from repo root without install
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -44,6 +45,7 @@ from xplane_web_api_bridge import (
     XPlaneWebAPIControlProvider,
     XPlaneWebAPIStateSource,
 )
+from xte_oracle import XteOracle, XteScenario
 
 # ---------------------------------------------------------------------------
 # Configuration paths (relative to repo root)
@@ -82,9 +84,12 @@ def run_sil_loop(
     xplane_host: str = XPLANE_HOST,
     log_path: str = SIL_LOG,
     enable_gust: bool | None = None,
-) -> None:
-    """Run the SIL loop for `cycles` iterations at `hz` Hz using Web API."""
+    xte_scenario: Optional[XteScenario] = None,
+) -> bool:
+    """Run the SIL loop for `cycles` iterations at `hz` Hz using Web API.
 
+    Returns True if all oracle checks passed (or no oracle), False on oracle failure.
+    """
     if enable_gust is None:
         enable_gust = SIL_ENABLE_GUST
 
@@ -140,6 +145,15 @@ def run_sil_loop(
 
     # Start polling X-Plane state
     xp_source.start()
+
+    oracle = XteOracle(xte_scenario) if xte_scenario is not None else None
+    if oracle is not None:
+        print(
+            f"[SIL] XTE oracle armed: wp=({xte_scenario.wp_lat},{xte_scenario.wp_lon}) "
+            f"course={xte_scenario.desired_course_deg}° "
+            f"sample={xte_scenario.sample_start_cycle}–{xte_scenario.sample_end_cycle} "
+            f"range=[{xte_scenario.expected_min_nm},{xte_scenario.expected_max_nm}] nm"
+        )
 
     dt = 1.0 / hz
     sequence = 0
@@ -198,15 +212,40 @@ def run_sil_loop(
             # 6. Send to X-Plane
             xp_sink.send_commands(protected_commands)
 
-            # 7. Log cycle summary every second
+            # 7. XTE oracle sample
+            if oracle is not None:
+                lat = xp_source.state.lat_deg
+                lon = xp_source.state.lon_deg
+                if lat is not None and lon is not None:
+                    xte = oracle.record(cycle, lat, lon)
+                    if xte is not None and cycle % hz == 0:
+                        logger.emit(
+                            event_type="xte_sample",
+                            mode=vote_result.mode,
+                            reason_code="xte_sample",
+                            details={
+                                "cycle": cycle,
+                                "lat": round(lat, 6),
+                                "lon": round(lon, 6),
+                                "xte_nm": round(xte, 4),
+                            },
+                        )
+
+            # 8. Log cycle summary every second
             if cycle % hz == 0:
                 flags = protection_result.flags
                 active = [k for k, v in flags.items() if v]
+                xte_str = ""
+                if oracle is not None:
+                    lat = xp_source.state.lat_deg
+                    lon = xp_source.state.lon_deg
+                    if lat is not None and lon is not None and oracle._samples:
+                        xte_str = f"  xte={oracle._samples[-1].xte_nm:+.3f}nm"
                 print(
                     f"[SIL] cycle={cycle:4d}  mode={vote_result.mode:8s}  "
                     f"IAS={aircraft_state.airspeed_kias:5.1f}  "
                     f"pitch={pitch_cmd:+.3f}  frames={len(frames)}  "
-                    f"protections={active or 'none'}"
+                    f"protections={active or 'none'}{xte_str}"
                 )
 
             sequence += 1
@@ -222,6 +261,27 @@ def run_sil_loop(
         xp_sink.close()
         print(f"[SIL] Loop complete. Events logged to: {log_path}")
 
+    oracle_passed = True
+    if oracle is not None:
+        result = oracle.evaluate()
+        logger.emit(
+            event_type="oracle_result",
+            mode="triplex",
+            reason_code="oracle_pass" if result.passed else "oracle_fail",
+            details=result.summary(),
+        )
+        status = "PASS" if result.passed else "FAIL"
+        print(
+            f"[SIL] XTE oracle {status}: "
+            f"samples={result.samples} "
+            f"mean={result.mean_xte_nm:+.3f}nm "
+            f"std={result.std_xte_nm:.3f}nm "
+            f"reason={result.reason}"
+        )
+        oracle_passed = bool(result.passed)
+
+    return oracle_passed
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run MAOS-FCS SIL loop via X-Plane Web API.")
@@ -230,12 +290,36 @@ if __name__ == "__main__":
     parser.add_argument("--host", default=XPLANE_HOST, help="X-Plane host (default: 127.0.0.1)")
     parser.add_argument("--log", default=SIL_LOG, help="Path to JSONL event log")
     parser.add_argument("--gust", action="store_true", help="Enable gust alleviation provider")
+
+    # XTE oracle args — all optional; oracle is disabled unless wp-lat/lon/course are all supplied
+    parser.add_argument("--xte-wp-lat", type=float, default=None, help="Waypoint latitude (deg)")
+    parser.add_argument("--xte-wp-lon", type=float, default=None, help="Waypoint longitude (deg)")
+    parser.add_argument("--xte-course", type=float, default=None, help="Desired course (deg true)")
+    parser.add_argument("--xte-sample-start", type=int, default=30, help="First cycle to sample XTE")
+    parser.add_argument("--xte-sample-end", type=int, default=270, help="Last cycle to sample XTE")
+    parser.add_argument("--xte-min-nm", type=float, default=None, help="Oracle pass: mean XTE >= this")
+    parser.add_argument("--xte-max-nm", type=float, default=None, help="Oracle pass: mean XTE <= this")
+
     args = parser.parse_args()
 
-    run_sil_loop(
+    xte_scenario: Optional[XteScenario] = None
+    if args.xte_wp_lat is not None and args.xte_wp_lon is not None and args.xte_course is not None:
+        xte_scenario = XteScenario(
+            wp_lat=args.xte_wp_lat,
+            wp_lon=args.xte_wp_lon,
+            desired_course_deg=args.xte_course,
+            sample_start_cycle=args.xte_sample_start,
+            sample_end_cycle=args.xte_sample_end,
+            expected_min_nm=args.xte_min_nm,
+            expected_max_nm=args.xte_max_nm,
+        )
+
+    passed = run_sil_loop(
         cycles=args.cycles,
         hz=args.hz,
         xplane_host=args.host,
         log_path=args.log,
         enable_gust=args.gust,
+        xte_scenario=xte_scenario,
     )
+    sys.exit(0 if passed else 1)

@@ -15,11 +15,106 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+# Active waypoint: 40.0°N, 88.0°W; desired course: 090° (due east)
+# All scenarios start near that point at 100 KIAS heading east.
+#
+# Sign convention (FIX-Gateway unit tests, compute.py):
+#   Negative XTE => aircraft north (left) of eastbound course
+#   Positive XTE => aircraft south (right) of eastbound course
+#
+# Note: the test-matrix document X-PLANE-TEST-MATRIX-PHASE-1B.md had this inverted.
+# Oracle ranges below use the correct FIX-Gateway convention.
+#
+# Lat offset reference: 0.05° ≈ 3.0 nm; 0.5° ≈ 30 nm.
+
+_WP_LAT = 40.0
+_WP_LON = -88.0
+_COURSE = 90.0
+
 SCENARIOS: List[Dict[str, Any]] = [
-    {"id": "22.1", "name": "xte_22_1_on_course_zero", "cycles": 300, "hz": 20, "gust": False},
-    {"id": "22.2", "name": "xte_22_2_left_deviation_negative", "cycles": 300, "hz": 20, "gust": False},
-    {"id": "22.3", "name": "xte_22_3_right_deviation_positive", "cycles": 300, "hz": 20, "gust": False},
-    {"id": "22.4", "name": "xte_22_4_large_deviation_recovery", "cycles": 600, "hz": 20, "gust": False},
+    # 22.1: Aircraft starts on course (40.0°N). XTE should remain ≈ 0 throughout.
+    {
+        "id": "22.1",
+        "name": "xte_22_1_on_course_zero",
+        "cycles": 300,
+        "hz": 20,
+        "gust": False,
+        "init_lat": 40.0,
+        "init_lon": -88.0,
+        "init_heading_deg": 90.0,
+        "extra_sil_args": [
+            "--xte-wp-lat", str(_WP_LAT),
+            "--xte-wp-lon", str(_WP_LON),
+            "--xte-course", str(_COURSE),
+            "--xte-sample-start", "30",
+            "--xte-sample-end", "270",
+            "--xte-min-nm", "-0.10",
+            "--xte-max-nm", "0.10",
+        ],
+    },
+    # 22.2: Aircraft starts 0.05° (≈3 nm) SOUTH of course.
+    # FIX-Gateway: south of eastbound → positive XTE ≈ +3.0 nm.
+    {
+        "id": "22.2",
+        "name": "xte_22_2_left_deviation_negative",
+        "cycles": 300,
+        "hz": 20,
+        "gust": False,
+        "init_lat": 39.95,
+        "init_lon": -88.0,
+        "init_heading_deg": 90.0,
+        "extra_sil_args": [
+            "--xte-wp-lat", str(_WP_LAT),
+            "--xte-wp-lon", str(_WP_LON),
+            "--xte-course", str(_COURSE),
+            "--xte-sample-start", "30",
+            "--xte-sample-end", "270",
+            "--xte-min-nm", "2.5",
+            "--xte-max-nm", "3.5",
+        ],
+    },
+    # 22.3: Aircraft starts 0.05° (≈3 nm) NORTH of course.
+    # FIX-Gateway: north of eastbound → negative XTE ≈ -3.0 nm.
+    {
+        "id": "22.3",
+        "name": "xte_22_3_right_deviation_positive",
+        "cycles": 300,
+        "hz": 20,
+        "gust": False,
+        "init_lat": 40.05,
+        "init_lon": -88.0,
+        "init_heading_deg": 90.0,
+        "extra_sil_args": [
+            "--xte-wp-lat", str(_WP_LAT),
+            "--xte-wp-lon", str(_WP_LON),
+            "--xte-course", str(_COURSE),
+            "--xte-sample-start", "30",
+            "--xte-sample-end", "270",
+            "--xte-min-nm", "-3.5",
+            "--xte-max-nm", "-2.5",
+        ],
+    },
+    # 22.4: Aircraft starts 0.5° (≈30 nm) NORTH of course.
+    # FIX-Gateway: north → strongly negative XTE ≈ -30 nm.
+    # Tests that large deviations don't saturate or wrap.
+    {
+        "id": "22.4",
+        "name": "xte_22_4_large_deviation_recovery",
+        "cycles": 600,
+        "hz": 20,
+        "gust": False,
+        "init_lat": 40.5,
+        "init_lon": -88.0,
+        "init_heading_deg": 90.0,
+        "extra_sil_args": [
+            "--xte-wp-lat", str(_WP_LAT),
+            "--xte-wp-lon", str(_WP_LON),
+            "--xte-course", str(_COURSE),
+            "--xte-sample-start", "30",
+            "--xte-sample-end", "270",
+            "--xte-max-nm", "-25.0",
+        ],
+    },
 ]
 
 
@@ -53,8 +148,8 @@ def _build_manifest(args: argparse.Namespace) -> Dict[str, Any]:
                 "path": "Aircraft/Laminar Research/Cessna 172 SP/Cessna_172SP.acf"
             },
             "runway_start": {
-                "airport_id": "KPDX",
-                "runway": "28L"
+                "airport_id": "KCMI",
+                "runway": "32L"
             },
             "local_time": {
                 "day_of_year": 120,
@@ -68,6 +163,10 @@ def _build_manifest(args: argparse.Namespace) -> Dict[str, Any]:
                 "cycles": item["cycles"],
                 "hz": item["hz"],
                 "gust": item["gust"],
+                "init_lat": item.get("init_lat"),
+                "init_lon": item.get("init_lon"),
+                "init_heading_deg": item.get("init_heading_deg", 90.0),
+                "extra_sil_args": item.get("extra_sil_args", []),
             }
             for item in selected
         ],
