@@ -486,6 +486,8 @@ def _inject_scenario_position(
     heading_deg: float = 90.0,
     airspeed_kias: float = 100.0,
     init_pitch_deg: float = 3.0,
+    init_bank_deg: float = 0.0,
+    init_elev_trim: float = 0.0,
     settle_s: float = 2.0,
 ) -> None:
     """Move the aircraft to a specific lat/lon with a clean, repeatable initial state.
@@ -505,8 +507,8 @@ def _inject_scenario_position(
       theta                    — pitch angle → init_pitch_deg
       local_vx, local_vy,      — velocity vector matching heading at airspeed_kias
       local_vz
-      elv_trim, ail_trim,      — all trim surfaces → 0 (neutral)
-      rud_trim
+      elv_trim                 — elevator trim → init_elev_trim (negative = nose down)
+      ail_trim, rud_trim        — neutral (0)
 
     local frame: +x = East, +y = Up, +z = South (−z = North)
     """
@@ -536,9 +538,9 @@ def _inject_scenario_position(
         _set_dataref_value(host, port, "sim/flightmodel/position/local_x", new_x)
         _set_dataref_value(host, port, "sim/flightmodel/position/local_z", new_z)
 
-        # Attitude: heading, level wings, shallow climb pitch
+        # Attitude: heading, bank, pitch
         _set_dataref_value(host, port, "sim/flightmodel/position/psi",   heading_deg)
-        _set_dataref_value(host, port, "sim/flightmodel/position/phi",   0.0)
+        _set_dataref_value(host, port, "sim/flightmodel/position/phi",   init_bank_deg)
         _set_dataref_value(host, port, "sim/flightmodel/position/theta", init_pitch_deg)
 
         # Velocity vector matching heading and target airspeed
@@ -548,22 +550,22 @@ def _inject_scenario_position(
         _set_dataref_value(host, port, "sim/flightmodel/position/local_vy",  0.0)
         _set_dataref_value(host, port, "sim/flightmodel/position/local_vz", -speed_ms * math.cos(heading_rad))
 
-        # Neutral trim — prevents residual FCS trim from the previous scenario
-        for dref in (
-            "sim/flightmodel/controls/elv_trim",
-            "sim/flightmodel/controls/ail_trim",
-            "sim/flightmodel/controls/rud_trim",
+        # Trim reset — neutral lateral/directional; elevator uses init_elev_trim
+        for dref, val in (
+            ("sim/flightmodel/controls/elv_trim", init_elev_trim),
+            ("sim/flightmodel/controls/ail_trim", 0.0),
+            ("sim/flightmodel/controls/rud_trim", 0.0),
         ):
             try:
-                _set_dataref_value(host, port, dref, 0.0)
+                _set_dataref_value(host, port, dref, val)
             except Exception:
                 pass
 
         dist_km = math.sqrt((dlat * 111.32) ** 2 + (dlon * m_per_deg_lon / 1000) ** 2)
         print(
             f"[campaign] position inject: target=({lat_deg:.5f},{lon_deg:.5f}) "
-            f"hdg={heading_deg:.0f}° pitch={init_pitch_deg:.1f}° IAS={airspeed_kias:.0f}kts "
-            f"dist={dist_km:.1f}km from ({cur_lat:.5f},{cur_lon:.5f})"
+            f"hdg={heading_deg:.0f}° bank={init_bank_deg:.1f}° pitch={init_pitch_deg:.1f}° "
+            f"IAS={airspeed_kias:.0f}kts dist={dist_km:.1f}km from ({cur_lat:.5f},{cur_lon:.5f})"
         )
 
     finally:
@@ -572,6 +574,41 @@ def _inject_scenario_position(
 
     if settle_s > 0:
         time.sleep(settle_s)
+
+
+def _engage_xplane_autopilot(host: str, port: int) -> None:
+    """Engage X-Plane altitude hold + heading hold autopilot modes.
+
+    Called after position injection so the aircraft holds level flight during
+    long SIL runs.  The SIL loop tests FCS computation logic, not flight
+    dynamics, so X-Plane's own autopilot keeping the aircraft stable is correct
+    behaviour.  Failures are best-effort — a warning is printed but the run
+    continues.
+    """
+    # Altitude hold — keeps aircraft from descending during long runs
+    for cmd_name in ("sim/autopilot/altitude_hold", "sim/autopilot/fdir_servos_up_one"):
+        try:
+            cmd_id = _get_command_id(host, port, cmd_name)
+            if cmd_id is not None:
+                _activate_command(host, port, cmd_id)
+                print(f"[campaign] autopilot: engaged {cmd_name}")
+                break
+        except Exception as exc:
+            print(f"[campaign] autopilot: {cmd_name} failed: {exc}")
+
+    # Heading hold — prevents drifting turns
+    for cmd_name in ("sim/autopilot/heading", "sim/autopilot/wing_leveler"):
+        try:
+            cmd_id = _get_command_id(host, port, cmd_name)
+            if cmd_id is not None:
+                _activate_command(host, port, cmd_id)
+                print(f"[campaign] autopilot: engaged {cmd_name}")
+                break
+        except Exception as exc:
+            print(f"[campaign] autopilot: {cmd_name} failed: {exc}")
+
+    # Brief settle so autopilot takes hold before SIL starts
+    time.sleep(1.5)
 
 
 def stabilize_and_climb(
@@ -903,6 +940,7 @@ def main() -> int:
         0.0, min(1.0, float(args.preflight_mixture_ratio))
     )
     preflight_override_controls = bool(args.preflight_override_controls)
+    engage_autopilot_after_reset = False
 
     scenarios: List[Dict[str, Any]]
     if args.manifest:
@@ -962,6 +1000,9 @@ def main() -> int:
             preflight_mixture_ratio = max(0.0, min(1.0, float(manifest["preflight_mixture_ratio"])))
         preflight_override_controls = bool(
             manifest.get("preflight_override_controls", preflight_override_controls)
+        )
+        engage_autopilot_after_reset = bool(
+            manifest.get("engage_autopilot_after_reset", False)
         )
         scenarios = [dict(s) for s in manifest["scenarios"]]
         print(f"[campaign] using manifest: {manifest_path}")
@@ -1120,24 +1161,43 @@ def main() -> int:
                                 lat_deg=float(scenario["init_lat"]),
                                 lon_deg=float(scenario["init_lon"]),
                                 heading_deg=float(scenario.get("init_heading_deg", 90.0)),
-                                airspeed_kias=airborne_airspeed_kias,
+                                airspeed_kias=float(
+                                    scenario.get("init_airspeed_kias", airborne_airspeed_kias)
+                                ),
                                 init_pitch_deg=float(scenario.get("init_pitch_deg", 3.0)),
+                                init_bank_deg=float(scenario.get("init_bank_deg", 0.0)),
+                                init_elev_trim=float(scenario.get("init_elev_trim", 0.0)),
                                 settle_s=float(scenario.get("init_position_wait_s", 2.0)),
                             )
                         except Exception as exc:
                             print(f"[campaign] warning: position inject failed: {exc}")
 
-                if post_reset_throttle_ratio is not None:
+                _eff_throttle = (
+                    float(scenario["init_throttle_ratio"])
+                    if "init_throttle_ratio" in scenario
+                    else post_reset_throttle_ratio
+                )
+                _eff_hold_s = (
+                    float(scenario.get("init_propulsion_hold_s", post_reset_propulsion_hold_s))
+                )
+                if _eff_throttle is not None:
                     try:
                         _apply_post_reset_propulsion_state(
                             host,
                             port,
-                            throttle_ratio=post_reset_throttle_ratio,
+                            throttle_ratio=_eff_throttle,
                             mixture_ratio=post_reset_mixture_ratio,
-                            hold_s=post_reset_propulsion_hold_s,
+                            hold_s=_eff_hold_s,
                         )
                     except Exception as exc:
                         print(f"[campaign] warning: propulsion init failed: {exc}")
+
+                _scenario_autopilot = scenario.get("engage_autopilot", engage_autopilot_after_reset)
+                if _scenario_autopilot:
+                    try:
+                        _engage_xplane_autopilot(host, port)
+                    except Exception as exc:
+                        print(f"[campaign] warning: autopilot engage failed: {exc}")
 
             if readiness_ok and airborne_each_run:
                 if pause_during_airborne_setup:

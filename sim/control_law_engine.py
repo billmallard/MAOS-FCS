@@ -63,13 +63,12 @@ def apply_protections(commands: Dict[str, float], state: AircraftState, cfg: Pro
         flags["overspeed_protection_active"] = True
 
     if abs(state.bank_deg) > cfg.max_bank_deg:
+        flags["bank_protection_active"] = True
         roll_cmd = out["roll"]
         if state.bank_deg > 0 and roll_cmd > 0:
             out["roll"] = 0.0
-            flags["bank_protection_active"] = True
         elif state.bank_deg < 0 and roll_cmd < 0:
             out["roll"] = 0.0
-            flags["bank_protection_active"] = True
 
     for axis, value in list(out.items()):
         out[axis] = max(-1.0, min(1.0, value))

@@ -27,7 +27,8 @@ import argparse
 import os
 import sys
 import time
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
 
 # Allow running from repo root without install
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -68,14 +69,175 @@ SIL_LOG = os.environ.get("SIL_LOG", _DEFAULT_LOG)
 SIL_ENABLE_GUST = os.environ.get("SIL_ENABLE_GUST", "0").lower() in ("1", "true", "yes")
 
 
-def _make_synthetic_lanes(pitch: float, roll: float, yaw: float) -> list[LaneSample]:
-    """Create three nominally-agreeing lane samples for the voter."""
+# ---------------------------------------------------------------------------
+# FCS mode and protection oracle
+# ---------------------------------------------------------------------------
+
+@dataclass
+class FcsModeOracleConfig:
+    """Assertions evaluated at end of run against collected mode/protection data."""
+
+    # Mode assertions
+    assert_mode_stable: Optional[str] = None        # mode must never leave this value
+    assert_mode_final: Optional[str] = None          # mode must be this at run end
+    assert_transitions_min: Optional[int] = None     # at least N mode transitions
+    assert_transitions_max: Optional[int] = None     # at most N mode transitions
+    # assert mode transitions within N cycles of fault injection start
+    assert_transition_within: Optional[int] = None
+    fault_start_cycle: Optional[int] = None          # reference cycle for transition_within
+
+    # Protection assertions
+    assert_protection_fires: List[str] = field(default_factory=list)
+    assert_protection_never: List[str] = field(default_factory=list)
+
+    # Structural assertions
+    assert_frames_min: Optional[int] = None          # at least N frames emitted total
+    assert_state_fresh_min_pct: Optional[float] = None  # at least N% cycles had fresh state
+
+
+@dataclass
+class FcsModeOracleResult:
+    passed: bool
+    reasons: List[str]
+    final_mode: str
+    mode_transitions: List[tuple]   # (cycle, from_mode, to_mode)
+    protection_fired: Set[str]
+    total_frames: int
+    fresh_cycles: int
+    total_cycles: int
+
+    def summary(self) -> Dict:
+        return {
+            "passed": self.passed,
+            "reasons": self.reasons,
+            "final_mode": self.final_mode,
+            "mode_transition_count": len(self.mode_transitions),
+            "mode_transitions": [
+                {"cycle": c, "from": f, "to": t} for c, f, t in self.mode_transitions
+            ],
+            "protection_fired": sorted(self.protection_fired),
+            "total_frames": self.total_frames,
+            "fresh_pct": (
+                round(100.0 * self.fresh_cycles / self.total_cycles, 1)
+                if self.total_cycles > 0 else 0.0
+            ),
+        }
+
+
+def _evaluate_fcs_oracle(
+    cfg: FcsModeOracleConfig,
+    mode_transitions: List[tuple],
+    final_mode: str,
+    mode_history: List[str],
+    protection_fired: Set[str],
+    total_frames: int,
+    fresh_cycles: int,
+    total_cycles: int,
+) -> FcsModeOracleResult:
+    reasons: List[str] = []
+
+    # --- mode_stable ---
+    if cfg.assert_mode_stable is not None:
+        unstable = [m for m in mode_history if m != cfg.assert_mode_stable]
+        if unstable:
+            reasons.append(
+                f"mode_stable: expected {cfg.assert_mode_stable!r} throughout "
+                f"but saw {sorted(set(unstable))}"
+            )
+
+    # --- mode_final ---
+    if cfg.assert_mode_final is not None and final_mode != cfg.assert_mode_final:
+        reasons.append(
+            f"mode_final: expected {cfg.assert_mode_final!r} got {final_mode!r}"
+        )
+
+    # --- transitions count ---
+    n = len(mode_transitions)
+    if cfg.assert_transitions_min is not None and n < cfg.assert_transitions_min:
+        reasons.append(
+            f"transitions_min: expected ≥{cfg.assert_transitions_min} transitions, got {n}"
+        )
+    if cfg.assert_transitions_max is not None and n > cfg.assert_transitions_max:
+        reasons.append(
+            f"transitions_max: expected ≤{cfg.assert_transitions_max} transitions, got {n}"
+        )
+
+    # --- transition_within N cycles of fault start ---
+    if cfg.assert_transition_within is not None and cfg.fault_start_cycle is not None:
+        deadline = cfg.fault_start_cycle + cfg.assert_transition_within
+        first_after = next(
+            (c for c, _, _ in mode_transitions if c >= cfg.fault_start_cycle), None
+        )
+        if first_after is None:
+            reasons.append(
+                f"transition_within: no transition found after fault_start={cfg.fault_start_cycle}"
+            )
+        elif first_after > deadline:
+            reasons.append(
+                f"transition_within: first transition at cycle {first_after}, "
+                f"expected within {cfg.assert_transition_within} cycles of fault_start={cfg.fault_start_cycle}"
+            )
+
+    # --- protection_fires ---
+    for flag in cfg.assert_protection_fires:
+        if flag not in protection_fired:
+            reasons.append(f"protection_fires: {flag!r} never triggered")
+
+    # --- protection_never ---
+    for flag in cfg.assert_protection_never:
+        if flag in protection_fired:
+            reasons.append(f"protection_never: {flag!r} triggered but must not fire")
+
+    # --- frames_min ---
+    if cfg.assert_frames_min is not None and total_frames < cfg.assert_frames_min:
+        reasons.append(
+            f"frames_min: expected ≥{cfg.assert_frames_min} frames, got {total_frames}"
+        )
+
+    # --- state_fresh_min_pct ---
+    if cfg.assert_state_fresh_min_pct is not None and total_cycles > 0:
+        pct = 100.0 * fresh_cycles / total_cycles
+        if pct < cfg.assert_state_fresh_min_pct:
+            reasons.append(
+                f"state_fresh: {pct:.1f}% fresh cycles, "
+                f"expected ≥{cfg.assert_state_fresh_min_pct:.0f}%"
+            )
+
+    passed = len(reasons) == 0
+    return FcsModeOracleResult(
+        passed=passed,
+        reasons=reasons,
+        final_mode=final_mode,
+        mode_transitions=mode_transitions,
+        protection_fired=protection_fired,
+        total_frames=total_frames,
+        fresh_cycles=fresh_cycles,
+        total_cycles=total_cycles,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Lane sample factory with optional fault injection
+# ---------------------------------------------------------------------------
+
+def _make_synthetic_lanes(
+    pitch: float,
+    roll: float,
+    yaw: float,
+    *,
+    lane_c_bias: float = 0.0,
+) -> List[LaneSample]:
+    """Create three lane samples for the voter, with optional bias on lane C."""
     return [
         LaneSample(lane_id="A", command=pitch, healthy=True),
         LaneSample(lane_id="B", command=pitch, healthy=True),
-        LaneSample(lane_id="C", command=pitch, healthy=True),
+        LaneSample(lane_id="C", command=pitch + lane_c_bias, healthy=True),
     ]
 
+
+# ---------------------------------------------------------------------------
+# Main SIL loop
+# ---------------------------------------------------------------------------
 
 def run_sil_loop(
     *,
@@ -85,10 +247,18 @@ def run_sil_loop(
     log_path: str = SIL_LOG,
     enable_gust: bool | None = None,
     xte_scenario: Optional[XteScenario] = None,
+    # Fault injection
+    fault_start_cycle: Optional[int] = None,
+    fault_bias: float = 0.15,
+    fault_clear_cycle: Optional[int] = None,
+    # FCS mode / protection oracle
+    fcs_oracle_cfg: Optional[FcsModeOracleConfig] = None,
+    # Config overrides
+    aircraft_config_path: Optional[str] = None,
 ) -> bool:
     """Run the SIL loop for `cycles` iterations at `hz` Hz using Web API.
 
-    Returns True if all oracle checks passed (or no oracle), False on oracle failure.
+    Returns True if all oracle checks passed (or no oracle), False on any failure.
     """
     if enable_gust is None:
         enable_gust = SIL_ENABLE_GUST
@@ -96,8 +266,9 @@ def run_sil_loop(
     # ------------------------------------------------------------------
     # Boot sequence
     # ------------------------------------------------------------------
-    print(f"[SIL] Loading aircraft config: {_AIRCRAFT_CFG}")
-    aircraft_cfg = load_aircraft_config(_AIRCRAFT_CFG)
+    _cfg_path = aircraft_config_path or _AIRCRAFT_CFG
+    print(f"[SIL] Loading aircraft config: {_cfg_path}")
+    aircraft_cfg = load_aircraft_config(_cfg_path)
     profiles = resolve_profiles(aircraft_cfg, _PROFILES_DIR)
     axis_profile_map = build_axis_profile_map(profiles)
     primary_profile = profiles[0]
@@ -112,6 +283,13 @@ def run_sil_loop(
         f"{protection_cfg.max_airspeed_kias:.0f} KIAS, "
         f"max bank {protection_cfg.max_bank_deg:.0f}°"
     )
+
+    if fault_start_cycle is not None:
+        print(
+            f"[SIL] Fault injection: lane C bias={fault_bias:+.3f} "
+            f"start={fault_start_cycle} "
+            f"clear={fault_clear_cycle if fault_clear_cycle is not None else 'never'}"
+        )
 
     logger = EventLogger(log_path)
     runtime = FcsRuntime()
@@ -137,13 +315,11 @@ def run_sil_loop(
     )
     registry.register(xp_provider)
 
-    # Optional gust alleviation provider
     if enable_gust:
         gust_provider = GustAlleviationProvider(priority=60)
         registry.register(gust_provider)
         print("[SIL] Gust alleviation enabled (priority 60)")
 
-    # Start polling X-Plane state
     xp_source.start()
 
     oracle = XteOracle(xte_scenario) if xte_scenario is not None else None
@@ -158,6 +334,14 @@ def run_sil_loop(
     dt = 1.0 / hz
     sequence = 0
 
+    # FCS oracle tracking state
+    mode_transitions: List[tuple] = []   # (cycle, from_mode, to_mode)
+    mode_history: List[str] = []
+    protection_fired: Set[str] = set()
+    total_frames = 0
+    fresh_cycles = 0
+    prev_tracked_mode = "triplex"
+
     print(f"[SIL] Starting loop: {cycles} cycles @ {hz} Hz")
     logger.emit(
         event_type="sil_start",
@@ -171,6 +355,9 @@ def run_sil_loop(
             "api_type": "webapi",
             "xplane_host": xplane_host,
             "gust_enabled": enable_gust,
+            "fault_start_cycle": fault_start_cycle,
+            "fault_bias": fault_bias if fault_start_cycle is not None else None,
+            "fault_clear_cycle": fault_clear_cycle,
         },
     )
 
@@ -179,9 +366,11 @@ def run_sil_loop(
             t0 = time.monotonic()
 
             # 1. Gather current flight state from X-Plane (or defaults)
-            if xp_source.state.is_fresh():
+            is_fresh = xp_source.state.is_fresh()
+            if is_fresh:
                 flight_state = xp_source.state.as_flight_state()
                 aircraft_state = xp_source.state.as_aircraft_state()
+                fresh_cycles += 1
             else:
                 flight_state = FlightState(airspeed_kias=90.0, bank_deg=0.0, pitch_deg=2.0)
                 aircraft_state = AircraftState(airspeed_kias=90.0, bank_deg=0.0)
@@ -193,14 +382,31 @@ def run_sil_loop(
             protection_result = apply_protections(raw_commands, aircraft_state, protection_cfg)
             protected_commands = protection_result.commands
 
-            # 4. Run vote cycle
+            # Track which protection flags fired this cycle
+            for flag, active in protection_result.flags.items():
+                if active:
+                    protection_fired.add(flag)
+
+            # 4. Run vote cycle with optional fault injection on lane C
             pitch_cmd = protected_commands.get("pitch", 0.0)
+            active_bias = 0.0
+            if fault_start_cycle is not None and cycle >= fault_start_cycle:
+                if fault_clear_cycle is None or cycle < fault_clear_cycle:
+                    active_bias = fault_bias
+
             lanes = _make_synthetic_lanes(
                 pitch_cmd,
                 protected_commands.get("roll", 0.0),
                 protected_commands.get("yaw", 0.0),
+                lane_c_bias=active_bias,
             )
             vote_result = runtime.run_vote_cycle(lanes, logger=logger)
+
+            # Track mode transitions for FCS oracle
+            mode_history.append(vote_result.mode)
+            if vote_result.mode != prev_tracked_mode:
+                mode_transitions.append((cycle, prev_tracked_mode, vote_result.mode))
+                prev_tracked_mode = vote_result.mode
 
             # 5. Build actuator command frames
             frames = build_actuator_command_frames(
@@ -208,6 +414,7 @@ def run_sil_loop(
                 axis_commands=protected_commands,
                 sequence=sequence,
             )
+            total_frames += len(frames)
 
             # 6. Send to X-Plane
             xp_sink.send_commands(protected_commands)
@@ -234,18 +441,20 @@ def run_sil_loop(
             # 8. Log cycle summary every second
             if cycle % hz == 0:
                 flags = protection_result.flags
-                active = [k for k, v in flags.items() if v]
+                active_flags = [k for k, v in flags.items() if v]
                 xte_str = ""
                 if oracle is not None:
                     lat = xp_source.state.lat_deg
                     lon = xp_source.state.lon_deg
                     if lat is not None and lon is not None and oracle._samples:
                         xte_str = f"  xte={oracle._samples[-1].xte_nm:+.3f}nm"
+                fault_str = f"  bias={active_bias:+.3f}" if active_bias != 0.0 else ""
                 print(
                     f"[SIL] cycle={cycle:4d}  mode={vote_result.mode:8s}  "
                     f"IAS={aircraft_state.airspeed_kias:5.1f}  "
+                    f"bank={aircraft_state.bank_deg:+6.1f}  "
                     f"pitch={pitch_cmd:+.3f}  frames={len(frames)}  "
-                    f"protections={active or 'none'}{xte_str}"
+                    f"protections={active_flags or 'none'}{xte_str}{fault_str}"
                 )
 
             sequence += 1
@@ -261,7 +470,9 @@ def run_sil_loop(
         xp_sink.close()
         print(f"[SIL] Loop complete. Events logged to: {log_path}")
 
-    oracle_passed = True
+    all_passed = True
+
+    # --- XTE oracle ---
     if oracle is not None:
         result = oracle.evaluate()
         logger.emit(
@@ -278,9 +489,42 @@ def run_sil_loop(
             f"std={result.std_xte_nm:.3f}nm "
             f"reason={result.reason}"
         )
-        oracle_passed = bool(result.passed)
+        if not result.passed:
+            all_passed = False
 
-    return oracle_passed
+    # --- FCS mode / protection oracle ---
+    if fcs_oracle_cfg is not None:
+        fcs_result = _evaluate_fcs_oracle(
+            cfg=fcs_oracle_cfg,
+            mode_transitions=mode_transitions,
+            final_mode=prev_tracked_mode,
+            mode_history=mode_history,
+            protection_fired=protection_fired,
+            total_frames=total_frames,
+            fresh_cycles=fresh_cycles,
+            total_cycles=cycles,
+        )
+        status = "PASS" if fcs_result.passed else "FAIL"
+        print(
+            f"[SIL] FCS oracle {status}: "
+            f"transitions={len(mode_transitions)} "
+            f"final_mode={fcs_result.final_mode} "
+            f"protections_fired={sorted(protection_fired) or 'none'} "
+            f"frames={total_frames} "
+            f"fresh={fcs_result.summary()['fresh_pct']}%"
+        )
+        if not fcs_result.passed:
+            print(f"[SIL] FCS oracle failures: {fcs_result.reasons}")
+        logger.emit(
+            event_type="fcs_oracle_result",
+            mode=prev_tracked_mode,
+            reason_code="fcs_oracle_pass" if fcs_result.passed else "fcs_oracle_fail",
+            details=fcs_result.summary(),
+        )
+        if not fcs_result.passed:
+            all_passed = False
+
+    return all_passed
 
 
 if __name__ == "__main__":
@@ -290,15 +534,77 @@ if __name__ == "__main__":
     parser.add_argument("--host", default=XPLANE_HOST, help="X-Plane host (default: 127.0.0.1)")
     parser.add_argument("--log", default=SIL_LOG, help="Path to JSONL event log")
     parser.add_argument("--gust", action="store_true", help="Enable gust alleviation provider")
+    parser.add_argument(
+        "--aircraft-config", default=None,
+        help="Path to aircraft config JSON (overrides default ga_default.json)",
+    )
 
-    # XTE oracle args — all optional; oracle is disabled unless wp-lat/lon/course are all supplied
-    parser.add_argument("--xte-wp-lat", type=float, default=None, help="Waypoint latitude (deg)")
-    parser.add_argument("--xte-wp-lon", type=float, default=None, help="Waypoint longitude (deg)")
-    parser.add_argument("--xte-course", type=float, default=None, help="Desired course (deg true)")
-    parser.add_argument("--xte-sample-start", type=int, default=30, help="First cycle to sample XTE")
-    parser.add_argument("--xte-sample-end", type=int, default=270, help="Last cycle to sample XTE")
-    parser.add_argument("--xte-min-nm", type=float, default=None, help="Oracle pass: mean XTE >= this")
-    parser.add_argument("--xte-max-nm", type=float, default=None, help="Oracle pass: mean XTE <= this")
+    # XTE oracle args
+    parser.add_argument("--xte-wp-lat", type=float, default=None)
+    parser.add_argument("--xte-wp-lon", type=float, default=None)
+    parser.add_argument("--xte-course", type=float, default=None)
+    parser.add_argument("--xte-sample-start", type=int, default=30)
+    parser.add_argument("--xte-sample-end", type=int, default=270)
+    parser.add_argument("--xte-min-nm", type=float, default=None)
+    parser.add_argument("--xte-max-nm", type=float, default=None)
+
+    # Fault injection args
+    parser.add_argument(
+        "--fault-start-cycle", type=int, default=None,
+        help="Inject lane C bias starting at this cycle",
+    )
+    parser.add_argument(
+        "--fault-bias", type=float, default=0.15,
+        help="Lane C command offset (default 0.15; voter threshold is 0.08)",
+    )
+    parser.add_argument(
+        "--fault-clear-cycle", type=int, default=None,
+        help="Stop injecting fault at this cycle (omit to keep fault for rest of run)",
+    )
+
+    # FCS mode oracle args
+    parser.add_argument(
+        "--assert-mode-stable", default=None,
+        help="Assert mode never leaves this value (e.g. triplex)",
+    )
+    parser.add_argument(
+        "--assert-mode-final", default=None,
+        help="Assert mode equals this value at end of run",
+    )
+    parser.add_argument(
+        "--assert-transitions-min", type=int, default=None,
+        help="Assert at least N mode transitions occurred",
+    )
+    parser.add_argument(
+        "--assert-transitions-max", type=int, default=None,
+        help="Assert at most N mode transitions occurred",
+    )
+    parser.add_argument(
+        "--assert-transition-within", type=int, default=None,
+        help="Assert a transition occurred within N cycles of --fault-start-cycle",
+    )
+
+    # FCS protection oracle args
+    parser.add_argument(
+        "--assert-protection-fires", action="append", default=[],
+        metavar="FLAG",
+        help="Assert this protection flag fired at least once (repeatable)",
+    )
+    parser.add_argument(
+        "--assert-protection-never", action="append", default=[],
+        metavar="FLAG",
+        help="Assert this protection flag never fired (repeatable)",
+    )
+
+    # Structural oracle args
+    parser.add_argument(
+        "--assert-frames-min", type=int, default=None,
+        help="Assert at least N actuator frames were emitted",
+    )
+    parser.add_argument(
+        "--assert-state-fresh-min-pct", type=float, default=None,
+        help="Assert at least N%% of cycles had fresh X-Plane state",
+    )
 
     args = parser.parse_args()
 
@@ -314,6 +620,32 @@ if __name__ == "__main__":
             expected_max_nm=args.xte_max_nm,
         )
 
+    fcs_oracle_cfg: Optional[FcsModeOracleConfig] = None
+    _has_fcs_assert = any([
+        args.assert_mode_stable,
+        args.assert_mode_final,
+        args.assert_transitions_min is not None,
+        args.assert_transitions_max is not None,
+        args.assert_transition_within is not None,
+        args.assert_protection_fires,
+        args.assert_protection_never,
+        args.assert_frames_min is not None,
+        args.assert_state_fresh_min_pct is not None,
+    ])
+    if _has_fcs_assert:
+        fcs_oracle_cfg = FcsModeOracleConfig(
+            assert_mode_stable=args.assert_mode_stable,
+            assert_mode_final=args.assert_mode_final,
+            assert_transitions_min=args.assert_transitions_min,
+            assert_transitions_max=args.assert_transitions_max,
+            assert_transition_within=args.assert_transition_within,
+            fault_start_cycle=args.fault_start_cycle,
+            assert_protection_fires=args.assert_protection_fires,
+            assert_protection_never=args.assert_protection_never,
+            assert_frames_min=args.assert_frames_min,
+            assert_state_fresh_min_pct=args.assert_state_fresh_min_pct,
+        )
+
     passed = run_sil_loop(
         cycles=args.cycles,
         hz=args.hz,
@@ -321,5 +653,10 @@ if __name__ == "__main__":
         log_path=args.log,
         enable_gust=args.gust,
         xte_scenario=xte_scenario,
+        fault_start_cycle=args.fault_start_cycle,
+        fault_bias=args.fault_bias,
+        fault_clear_cycle=args.fault_clear_cycle,
+        fcs_oracle_cfg=fcs_oracle_cfg,
+        aircraft_config_path=args.aircraft_config,
     )
     sys.exit(0 if passed else 1)
