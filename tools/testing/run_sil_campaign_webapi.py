@@ -34,6 +34,14 @@ from typing import Any, Dict, List
 
 import requests
 
+# campaign package lives under sim/
+_SIM_DIR = Path(__file__).resolve().parents[2] / "sim"
+if str(_SIM_DIR) not in sys.path:
+    sys.path.insert(0, str(_SIM_DIR))
+
+from campaign.metadata import write_run_env  # noqa: E402
+from campaign.taxonomy import FailureClass   # noqa: E402
+
 
 DEFAULT_SCENARIOS: List[Dict[str, Any]] = [
     {"name": "runway_idle_baseline", "cycles": 200, "hz": 20, "gust": False},
@@ -706,6 +714,24 @@ def evaluate_readiness(host: str, port: int) -> List[Dict[str, str]]:
                 }
             )
 
+    # Bridge state freshness: verify the physics bridge is producing flight-model data.
+    try:
+        alt = _get_dataref_value(host, port, "sim/flightmodel/position/local_y")
+        if alt is None:
+            failures.append(
+                {
+                    "reason_code": "INFRA_FAIL_BRIDGE_STATE_UNREADABLE",
+                    "message": "sim/flightmodel/position/local_y returned None",
+                }
+            )
+    except Exception as exc:
+        failures.append(
+            {
+                "reason_code": "INFRA_FAIL_BRIDGE_STATE_UNREADABLE",
+                "message": str(exc),
+            }
+        )
+
     return failures
 
 
@@ -1115,11 +1141,12 @@ def main() -> int:
                 if reset_error is not None:
                     rc = 2
                     ok = False
-                    status = "INFRA_FAIL"
+                    failure_class = FailureClass.INFRA_FAIL
                     code = "INFRA_FAIL_STARTUP_RESET"
                     reason_counts[code] = reason_counts.get(code, 0) + 1
                     scenario_reason_counts = {code: 1}
                     failures += 1
+                    write_run_env(run_dir, scenario_id, stem=f"{log_path.stem}_run_env")
                     summary.append(
                         {
                             "repeat": rep,
@@ -1130,7 +1157,8 @@ def main() -> int:
                             "gust": scenario.get("gust", False),
                             "log": str(log_path.relative_to(repo_root)),
                             "return_code": rc,
-                            "status": status,
+                            "status": failure_class.value,
+                            "failure_class": failure_class.value,
                             "ok": ok,
                             "reason_counts": scenario_reason_counts,
                             "reset_error": reset_error,
@@ -1252,19 +1280,20 @@ def main() -> int:
                         print(f"[campaign] warning: preflight active recovery failed: {exc}")
                 rc = run_one_sil(repo_root, host, scenario, log_path)
                 ok = rc == 0
-                status = "PASS" if ok else "FAIL"
+                failure_class = FailureClass.from_rc(rc)
                 scenario_reason_counts = _extract_reason_counts(log_path)
                 _merge_reason_counts(reason_counts, scenario_reason_counts)
             else:
                 rc = 2
                 ok = False
-                status = "INFRA_FAIL"
+                failure_class = FailureClass.INFRA_FAIL
                 scenario_reason_counts = {}
                 for rf in readiness_failures:
                     code = rf["reason_code"]
                     reason_counts[code] = reason_counts.get(code, 0) + 1
                     scenario_reason_counts[code] = scenario_reason_counts.get(code, 0) + 1
 
+            write_run_env(run_dir, scenario_id, stem=f"{log_path.stem}_run_env")
             if not ok:
                 failures += 1
             summary.append(
@@ -1277,7 +1306,8 @@ def main() -> int:
                     "gust": scenario.get("gust", False),
                     "log": str(log_path.relative_to(repo_root)),
                     "return_code": rc,
-                    "status": status,
+                    "status": failure_class.value,
+                    "failure_class": failure_class.value,
                     "ok": ok,
                     "reason_counts": scenario_reason_counts,
                 }
