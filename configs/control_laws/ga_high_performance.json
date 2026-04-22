@@ -7,5 +7,24 @@
     "max_bank_deg": 60.0,
     "stall_pitch_up_limit_norm": 0.04,
     "overspeed_pitch_down_limit_norm": -0.04
+  },
+  "aoa_protection": {
+    "_note": "stall_aoa_by_config values are PLACEHOLDERS — must be replaced with in-flight calibration data before AoA protection is meaningful. See calibration_mode block.",
+    "stall_aoa_by_config": {
+      "clean":      14.5,
+      "flaps_10":   14.0,
+      "flaps_full": 13.0
+    },
+    "warn_margin_deg":    2.5,
+    "limit_margin_deg":   1.0,
+    "pitch_up_limit_norm": 0.04
+  },
+  "calibration_mode": {
+    "_note": "Set enabled=true only for AoA calibration flights. IAS stall floor remains active. Reset to false after calibration.",
+    "enabled":                    false,
+    "bypass_aoa_protection":      true,
+    "bypass_ias_stall_protection": false,
+    "log_raw_aoa":                true,
+    "log_interval_hz":            10.0
   }
 }

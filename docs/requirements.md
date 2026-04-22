@@ -65,6 +65,11 @@ These requirements cover:
 - FCS-LAW-002: Control-law protections shall include minimum airspeed (stall protection), maximum airspeed (overspeed protection), and maximum bank angle protection.
 - FCS-LAW-003: At least two example control-law profiles shall be provided for different GA aircraft classes.
 - FCS-LAW-004: Protection activity flags shall be exposed for telemetry and test validation.
+- FCS-LAW-005: The system shall support AoA-based stall margin protection when a calibrated AoA sensor value is available, using aircraft-configuration-specific stall AoA values loaded from the control-law profile.
+- FCS-LAW-006: AoA protection shall implement two thresholds below the configured stall AoA: a warning margin (advisory flag, no authority change) and a limit margin (pitch-up command clipped).
+- FCS-LAW-007: AoA stall limits shall be configurable per wing configuration key (e.g., clean, flaps_10, flaps_full) to account for configuration-dependent sensor and aerodynamic characteristics.
+- FCS-LAW-008: When AoA sensor data is unavailable (sensor not installed, failed, or not yet calibrated), the system shall fall back to IAS-based stall protection transparently with no failure annunciation.
+- FCS-LAW-009: A calibration mode shall be supported via configuration flag that bypasses AoA-based protection while retaining IAS-based stall protection as a last resort. Calibration mode shall annunciate as active via a persistent telemetry flag for the duration of the mode.
 
 ### Voting and fault isolation
 
@@ -94,6 +99,11 @@ These requirements cover:
 - FCS-VER-010: Tests shall verify actuator runtime monitoring for mismatch, timeout persistence, and event logging behavior.
 - FCS-VER-011: Cross-language conformance vectors shall be maintained so firmware and simulation actuator codecs remain byte-aligned.
 - FCS-VER-012: Cross-language fault interpretation conformance vectors shall verify that C actuator_evaluate_feedback() and Python evaluate_feedback() return identical reason codes for overtemperature, position_mismatch, comm_timeout, and multi-fault conditions.
+- FCS-VER-013: Tests shall verify AoA protection clips pitch-up commands when AoA is within the configured limit margin of the stall AoA.
+- FCS-VER-014: Tests shall verify the AoA warning flag is set when AoA is within the warn margin but outside the limit margin, with no command change.
+- FCS-VER-015: Tests shall verify calibration mode bypasses AoA protection while IAS-based stall protection remains active.
+- FCS-VER-016: Tests shall verify the calibration_mode_active flag is set whenever calibration mode is enabled, regardless of aircraft state.
+- FCS-VER-017: Tests shall verify AoA protection is skipped and IAS stall protection remains active when AoA sensor data is unavailable.
 
 ### Software-in-the-Loop (SIL) and simulator integration
 
