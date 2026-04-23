@@ -128,6 +128,16 @@ High-fidelity simulation phases (actuator dynamics, sensor faults, bus timing, e
 
 These items are approved as roadmap intent but are not baseline implementation requirements for v0.1.
 
+### Autopilot provider interface readiness
+
+These requirements do not implement autopilot functionality. They ensure the FCS provider interface and shared state struct remain clean boundaries so a future MAOS-AUTOPILOT module can connect without requiring breaking changes to MAOS-FCS internals. Autopilot logic itself belongs in a separate module that registers as a ControlProvider.
+
+- FCS-FUT-AP-001: The `FlightState` struct passed to all ControlProviders shall be extended to include the fields required for outer-loop guidance computations before a MAOS-AUTOPILOT module is integrated. Required additions: `altitude_ft` (pressure altitude), `vertical_speed_fpm` (barometric rate of climb/descent), `heading_deg` (magnetic heading), `track_deg` (GPS ground track), and `groundspeed_ktas` (GPS groundspeed). These fields complement the existing `airspeed_kias`, `bank_deg`, and `pitch_deg`.
+- FCS-FUT-AP-002: The `FlightState` extension shall be additive and backward-compatible; existing providers that do not reference the new fields shall require no changes.
+- FCS-FUT-AP-003: The ControlProvider protocol shall remain the sole interface through which an external autopilot module commands axes. No autopilot-specific command path shall be added to the FCS core.
+- FCS-FUT-AP-004: Envelope protections shall apply to autopilot provider commands identically to pilot commands. The autopilot shall have no mechanism to bypass AoA, IAS, or bank protections that would not also be available to a pilot input provider.
+- FCS-FUT-AP-005: Provider priority levels shall be documented and reserved such that an autopilot provider (outer loop) can always be overridden by direct pilot input (higher priority) without configuration changes at integration time.
+
 ### Phase-of-flight awareness and mode shaping
 
 - FCS-FUT-001: The system shall support a configurable phase-of-flight state model with at least takeoff, climb, cruise, descent, landing, and go-around phases.
