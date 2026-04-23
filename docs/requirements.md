@@ -114,6 +114,13 @@ These requirements cover:
 - FCS-SIL-005: SIL events shall be logged in the same JSONL format used by hardware-in-the-loop and simulation test runs.
 - FCS-SIL-006: The SIL driver shall operate in dry-run mode (no network sockets) for automated CI verification without a live simulator.
 
+### MAVLink external interface
+
+- FCS-MAV-001: MAOS-FCS shall output MAVLink telemetry over UDP each control cycle when a ground station address is configured.
+- FCS-MAV-002: MAVLink telemetry output shall not affect control loop timing or voted command output.
+- FCS-MAV-003: A MAOS dialect XML shall define MAOS-specific status messages (operating mode, lane health, active protection flags) not present in `common.xml`.
+- FCS-MAV-004: A MAVLink SIL bridge shall implement the ControlProvider protocol so MAVLink-speaking simulators participate in the existing priority-arbitration path without special-casing.
+
 ## Test Matrix & Roadmap
 
 Concrete first-pass SIL test scenarios are defined in [SIL Phase-1 Test Matrix](sil_phase1_test_matrix.md).
