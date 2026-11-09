@@ -2,6 +2,19 @@
 
 Open-source Fly-By-Wire Flight Control System for MAOS aircraft concepts.
 
+> **Looking for the sensor unit behind pyEfis? This is not it.**
+>
+> MAOS-FCS is fly-by-wire research. The STM32H7 computers, IMUs, magnetometers and air-data
+> sensors described here are flight-control lanes for the MAOS clean-sheet airframe, and that
+> airframe was archived in October 2026. Nothing here is an ADAHRS for pyEfis, and there is no
+> firmware here for a stand-alone STM32 sensor board.
+>
+> The pyEfis display gets attitude, heading, GPS and air data through
+> [FIX-Gateway](https://github.com/makerplane/FIX-Gateway) plugins. The hardware path being
+> bench-tested now is an off-the-shelf ArduPilot flight controller, with DroneCAN GPS/compass and
+> airspeed modules, read by FIX-Gateway's `mavlink` plugin. It needs no custom PCB. A builder's
+> reference guide (parts list, wiring, settings) will be published once that bench test passes.
+
 ## Role in MAOS Multi-Project Architecture
 
 This repository owns the flight-control domain for the MAOS program.
